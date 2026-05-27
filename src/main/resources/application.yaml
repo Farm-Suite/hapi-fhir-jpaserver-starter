@@ -178,7 +178,7 @@ hapi:
     # A. Core Server & API
     # -------------------------------------------------------------------------------
     openapi_enabled: true                       # Swagger UI at /fhir/swagger-ui/index.html; API docs at /fhir/api-docs
-    fhir_version: R4                            # DSTU2 | DSTU3 | R4 | R5
+    fhir_version: R5                            # DSTU2 | DSTU3 | R4 | R5
     # use_apache_address_strategy: false
     # use_apache_address_strategy_https: false
     # custom_content_path: ./custom               # folder name must be 'custom'
@@ -503,4 +503,4 @@ hapi:
         name: Local Tester
         server_address: 'http://localhost:8080/fhir'
         refuse_to_fetch_third_party_urls: false
-        fhir_version: R4
+        fhir_version: R5
