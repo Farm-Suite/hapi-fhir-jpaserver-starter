@@ -1,0 +1,4 @@
+HAPI FHIR JPA Server deployed.
+
+FHIR base URL: https://farmsuite.org/fhir
+Swagger UI:    https://farmsuite.org/fhir/swagger-ui/index.html

@@ -1,0 +1,6 @@
+apiVersion: v2
+appVersion: 8.4.0
+description: A Helm chart for HAPI FHIR JPA Server
+name: hapi-fhir
+type: application
+version: 0.1.0

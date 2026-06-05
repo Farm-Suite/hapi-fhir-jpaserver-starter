@@ -1,0 +1,137 @@
+global:
+  imagePullSecrets: []
+  image:
+    imagePullPolicy: Always
+  httpRoute:
+    enabled: true
+    parentRefs:
+      - name: gateway
+        sectionName: https
+    hostnames:
+      - 'farmsuite.org'
+  tls:
+    configMapName: ""
+
+replicaCount: 1
+
+image:
+  tag: "latest"
+
+nameOverride: ""
+fullnameOverride: ""
+
+podAnnotations: {}
+podLabels: {}
+
+service:
+  type: ClusterIP
+  port: 8080
+
+resources:
+  requests:
+    memory: "1Gi"
+    cpu: "250m"
+  limits:
+    memory: "2Gi"
+    cpu: "1000m"
+
+livenessProbe:
+  initialDelaySeconds: 60
+  periodSeconds: 30
+  failureThreshold: 5
+readinessProbe:
+  initialDelaySeconds: 60
+  periodSeconds: 15
+  failureThreshold: 5
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 2
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+volumes: []
+volumeMounts: []
+
+tolerations: []
+
+affinity: {}
+
+http_relative_path: "/fhir"
+
+applicationYaml: |
+  server:
+    port: 8080
+
+  management:
+    endpoints:
+      enabled-by-default: false
+      web:
+        exposure:
+          include: "health"
+    endpoint:
+      health:
+        enabled: true
+        probes:
+          enabled: true
+
+  spring:
+    main:
+      allow-bean-definition-overriding: false
+      allow-circular-references: true
+      banner-mode: off
+    autoconfigure:
+      exclude: org.springframework.boot.autoconfigure.elasticsearch.ElasticsearchRestClientAutoConfiguration
+    flyway:
+      enabled: false
+    datasource:
+      url: jdbc:postgresql://postgres-pre-postgresql.persistence-pre.svc.cluster.local:5432/farmsuite?currentSchema=fhir
+      username: postgres
+      password: "YYw1k4Wqae"
+      driver-class-name: org.postgresql.Driver
+      hikari:
+        maximum-pool-size: 10
+    jpa:
+      properties:
+        hibernate:
+          format_sql: false
+          show_sql: false
+          dialect: ca.uhn.fhir.jpa.model.dialect.HapiFhirPostgresDialect
+          default_schema: fhir
+          hbm2ddl:
+            auto: update
+
+  hapi:
+    fhir:
+      fhir_version: R5
+      openapi_enabled: true
+      narrative_enabled: false
+      bulk_export_enabled: false
+      bulk_import_enabled: false
+      mdm_enabled: false
+      ig_runtime_upload_enabled: false
+      search-coord-core-pool-size: 20
+      search-coord-max-pool-size: 100
+      search-coord-queue-capacity: 200
+      search_prefetch_thresholds: 13,503,2003,-1
+      cors:
+        allowed_origin:
+          - "*"
+      cr:
+        enabled: false
+      cdshooks:
+        enabled: false
+      logical_urls:
+        - http://terminology.hl7.org/*
+        - https://terminology.hl7.org/*
+        - http://snomed.info/*
+        - https://snomed.info/*
+        - http://unitsofmeasure.org/*
+        - https://unitsofmeasure.org/*
+        - http://loinc.org/*
+        - https://loinc.org/*
+
+  logging:
+    level:
+      root: INFO
