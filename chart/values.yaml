@@ -36,12 +36,14 @@ resources:
     cpu: "1000m"
 
 livenessProbe:
-  initialDelaySeconds: 60
+  initialDelaySeconds: 90
   periodSeconds: 30
+  timeoutSeconds: 10
   failureThreshold: 5
 readinessProbe:
-  initialDelaySeconds: 60
+  initialDelaySeconds: 90
   periodSeconds: 15
+  timeoutSeconds: 10
   failureThreshold: 5
 
 autoscaling:
@@ -63,18 +65,6 @@ http_relative_path: "/fhir"
 applicationYaml: |
   server:
     port: 8080
-
-  management:
-    endpoints:
-      enabled-by-default: false
-      web:
-        exposure:
-          include: "health"
-    endpoint:
-      health:
-        enabled: true
-        probes:
-          enabled: true
 
   spring:
     main:

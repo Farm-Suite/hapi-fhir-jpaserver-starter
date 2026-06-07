@@ -43,14 +43,14 @@ spec:
               protocol: TCP
           livenessProbe:
             httpGet:
-              path: /actuator/health/liveness
+              path: /fhir/metadata
               port: http
             {{- with .Values.livenessProbe }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
           readinessProbe:
             httpGet:
-              path: /actuator/health/readiness
+              path: /fhir/metadata
               port: http
             {{- with .Values.readinessProbe }}
             {{- toYaml . | nindent 12 }}
