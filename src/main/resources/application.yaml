@@ -67,6 +67,9 @@ sso:
   oidc:
     enabled: true
     issuer-uri: https://farmsuite.org/auth/realms/farmsuite
+    public-paths:
+      - /fhir/swagger-ui/**
+      - /fhir/api-docs/**
 
 
 logging:

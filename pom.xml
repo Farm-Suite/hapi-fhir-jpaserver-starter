@@ -60,6 +60,9 @@
             <id>github-farmsuite-sso</id>
             <name>GitHub Farm-Suite SSO Packages</name>
             <url>https://maven.pkg.github.com/Farm-Suite/SSO</url>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
         </repository>
     </repositories>
 

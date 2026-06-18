@@ -2,14 +2,24 @@ FROM docker.io/library/maven:3.9.12-eclipse-temurin-17 AS build-hapi
 WORKDIR /tmp/hapi-fhir-jpaserver-starter
 
 ARG OPENTELEMETRY_JAVA_AGENT_VERSION=2.24.0
+
 RUN curl -LSsO https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/v${OPENTELEMETRY_JAVA_AGENT_VERSION}/opentelemetry-javaagent.jar
 
 COPY pom.xml .
 COPY server.xml .
-RUN mvn -ntp dependency:go-offline
+COPY .mvn/ .mvn/
+RUN --mount=type=secret,id=github_actor \
+    --mount=type=secret,id=github_token \
+    GITHUB_ACTOR=$(cat /run/secrets/github_actor) \
+    GITHUB_TOKEN=$(cat /run/secrets/github_token) \
+    mvn -ntp dependency:go-offline
 
 COPY src/ /tmp/hapi-fhir-jpaserver-starter/src/
-RUN mvn clean install -DskipTests -Djdk.lang.Process.launchMechanism=vfork
+RUN --mount=type=secret,id=github_actor \
+    --mount=type=secret,id=github_token \
+    GITHUB_ACTOR=$(cat /run/secrets/github_actor) \
+    GITHUB_TOKEN=$(cat /run/secrets/github_token) \
+    mvn clean install -DskipTests -Djdk.lang.Process.launchMechanism=vfork
 
 FROM build-hapi AS build-distroless
 RUN mvn package -DskipTests spring-boot:repackage -Pboot
