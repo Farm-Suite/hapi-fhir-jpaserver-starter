@@ -56,6 +56,11 @@
                 <enabled>true</enabled>
             </snapshots>
         </repository>
+        <repository>
+            <id>github-farmsuite-sso</id>
+            <name>GitHub Farm-Suite SSO Packages</name>
+            <url>https://maven.pkg.github.com/Farm-Suite/SSO</url>
+        </repository>
     </repositories>
 
     <dependencyManagement>
@@ -437,6 +442,17 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.farmsuite</groupId>
+            <artifactId>sso-interceptor-spring-autoconfigure</artifactId>
+            <version>1.0.1-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <scope>provided</scope>
         </dependency>
 
     </dependencies>
