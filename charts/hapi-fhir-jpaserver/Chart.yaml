@@ -1,6 +1,0 @@
-apiVersion: v2
-name: hapi-fhir-jpaserver
-description: A Helm chart for deploying the HAPI FHIR JPA server on Kubernetes.
-type: application
-appVersion: "8.6.0"
-version: 0.1.0
