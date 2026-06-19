@@ -62,6 +62,8 @@ hapi:
       request_tenant_partitioning_mode: true
       conditional-create-duplicate-identifiers-enabled: false
       database-partition-mode-enabled: true
+    custom-interceptor-classes:
+      - org.farmsuite.fhir.interceptors.RequestDefaultTenantInterceptor
 
 sso:
   oidc:
