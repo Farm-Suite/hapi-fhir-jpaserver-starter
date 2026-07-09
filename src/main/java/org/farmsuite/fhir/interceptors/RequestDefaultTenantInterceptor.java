@@ -11,7 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.Set;
 
 @Slf4j
-@Interceptor(order = -100)
+@Interceptor
 public class RequestDefaultTenantInterceptor {
 
 	private static final Set<String> DEFAULT_TENANT_RESOURCES = Set.of(

@@ -1,0 +1,11 @@
+{
+  "resourceType": "SearchParameter",
+  "url": "http://farmsuite.org/fhir/SearchParameter/permission-actor",
+  "name": "PermissionActor",
+  "status": "active",
+  "description": "Permite buscar Permission por el actor (p. ej. Group) referenciado en rule.activity.actor.",
+  "code": "actor",
+  "base": ["Permission"],
+  "type": "reference",
+  "expression": "Permission.rule.activity.actor"
+}

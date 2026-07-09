@@ -64,6 +64,7 @@ hapi:
       database-partition-mode-enabled: true
     custom-interceptor-classes:
       - org.farmsuite.fhir.interceptors.RequestDefaultTenantInterceptor
+    custom-bean-packages: org.farmsuite.fhir
 
 sso:
   oidc:
