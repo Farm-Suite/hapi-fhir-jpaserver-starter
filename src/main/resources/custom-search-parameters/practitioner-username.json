@@ -1,0 +1,11 @@
+{
+  "resourceType": "SearchParameter",
+  "url": "http://farmsuite.org/fhir/SearchParameter/practitioner-username",
+  "name": "PractitionerUsername",
+  "status": "active",
+  "description": "Permite buscar Practitioner por su username (almacenado como Identifier con system https://farmsuite.org/extensions/practitioner-username), sin tener que conocer ese system al hacer la query.",
+  "code": "username",
+  "base": ["Practitioner"],
+  "type": "token",
+  "expression": "Practitioner.identifier.where(system='https://farmsuite.org/extensions/practitioner-username')"
+}

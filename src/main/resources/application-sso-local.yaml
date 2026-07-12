@@ -1,0 +1,7 @@
+sso:
+  oidc:
+    enabled: true
+    issuer-uri: http://localhost:8080/auth/realms/farmsuite
+    public-paths:
+      - /fhir/swagger-ui/**
+      - /fhir/api-docs/**
