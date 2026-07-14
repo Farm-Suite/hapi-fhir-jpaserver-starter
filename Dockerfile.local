@@ -1,0 +1,14 @@
+# Dockerfile "local dev" — reutiliza el target/ROOT.war ya construido por Maven en el host
+# (perfil "local" del pom.xml, docker-build ligado a la fase package), en vez de reconstruir
+# desde fuente dentro de Docker con secretos de GitHub montados como hace el Dockerfile oficial
+# del fork. Reutiliza el mismo mecanismo de arranque (PropertiesLauncher) que el target
+# "default" (distroless) del Dockerfile oficial, ya probado para sortear el bug conocido de
+# "java -jar ROOT.war no funciona" documentado en el pom.xml (spring-boot-maven-plugin,
+# loaderImplementation CLASSIC).
+FROM gcr.io/distroless/java21-debian13:nonroot
+USER 65532:65532
+WORKDIR /app
+
+COPY --chown=nonroot:nonroot target/ROOT.war /app/main.war
+
+ENTRYPOINT ["java", "--class-path", "/app/main.war", "-Dloader.path=main.war!/WEB-INF/classes/,main.war!/WEB-INF/,/app/extra-classes", "org.springframework.boot.loader.PropertiesLauncher"]

@@ -766,6 +766,75 @@
                     <version>1.28.0</version>
                 </dependency>
             </dependencies>
-        </profile>       
+        </profile>
+        <!--
+        Reconstruye y reinicia el contenedor local con un solo comando: mvn clean package -P local,boot
+        (el profile "boot" es activeByDefault, pero activar "local" explícitamente lo desactiva salvo
+        que también se liste — necesario porque el build distroless requiere spring-boot:repackage -Pboot,
+        igual que hace el target "build-distroless" del Dockerfile oficial del fork).
+        Usa Dockerfile.local (reutiliza target/ROOT.war ya construido en el host) en vez del Dockerfile
+        oficial multi-stage (que reconstruye desde fuente dentro de Docker con secretos de GitHub montados),
+        para no tocar el pipeline de build sincronizado con el fork upstream.
+        -->
+        <profile>
+            <id>local</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>io.fabric8</groupId>
+                        <artifactId>docker-maven-plugin</artifactId>
+                        <version>0.48.1</version>
+                        <executions>
+                            <execution>
+                                <id>docker-stop</id>
+                                <phase>initialize</phase>
+                                <goals>
+                                    <goal>stop</goal>
+                                </goals>
+                            </execution>
+                            <execution>
+                                <id>docker-build</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>build</goal>
+                                </goals>
+                            </execution>
+                            <execution>
+                                <id>docker-start</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>start</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <images>
+                                <image>
+                                    <name>hapi-fhir-jpaserver-start:local</name>
+                                    <build>
+                                        <dockerFile>${project.basedir}/Dockerfile.local</dockerFile>
+                                        <contextDir>${project.basedir}</contextDir>
+                                    </build>
+                                    <run>
+                                        <network>
+                                            <mode>host</mode>
+                                        </network>
+                                        <wait>
+                                            <tcp>
+                                                <host>localhost</host>
+                                                <ports>
+                                                    <port>8081</port>
+                                                </ports>
+                                            </tcp>
+                                            <time>90000</time>
+                                        </wait>
+                                    </run>
+                                </image>
+                            </images>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
     </profiles>
 </project>
