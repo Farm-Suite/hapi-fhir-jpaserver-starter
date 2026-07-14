@@ -5,3 +5,12 @@ sso:
     public-paths:
       - /fhir/swagger-ui/**
       - /fhir/api-docs/**
+
+# Perfil de desarrollo local: cualquier origen puede llamar al servidor FHIR
+# desde el navegador (necesario para probar frontales nuevos en distintos
+# puertos sin tener que dar de alta cada uno). No usar "*" en despliegues
+# reales — ver cors.allowed-origins en Administration-MIC/Configuration-MIC
+# para el patrón de lista explícita.
+cors:
+  allowed-origins:
+    - "*"
