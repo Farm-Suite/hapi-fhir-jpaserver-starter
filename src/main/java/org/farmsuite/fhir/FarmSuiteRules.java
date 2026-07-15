@@ -19,6 +19,10 @@ public class FarmSuiteRules extends AuthorizationInterceptor {
 
 	@Override
 	public List<IAuthRule> buildRuleList(RequestDetails theRequestDetails) {
+		return new RuleBuilder()
+				.allowAll()
+				.build();
+		/*
 		if (userSessionRepository.isAdmin()){
 			log.debug("Admin user logged in");
 			return new RuleBuilder()
@@ -33,7 +37,8 @@ public class FarmSuiteRules extends AuthorizationInterceptor {
 		return userSessionRepository.getUserSession()
 			.map(this::buildRulesForSession)
 			.orElseGet(() -> new RuleBuilder().denyAll("no-session").build());
-		 */
+
 		return new RuleBuilder().denyAll("no-session").build();
+		 */
 	}
 }

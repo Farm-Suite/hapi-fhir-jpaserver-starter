@@ -1,4 +1,6 @@
 server:
+  tomcat:
+    relaxed-query-chars: "|"
   port: 8081
 
 spring:
@@ -79,5 +81,5 @@ sso:
 
 logging:
   level:
-    root: INFO
+    root: DEBUG
     org.farmsuite: DEBUG
