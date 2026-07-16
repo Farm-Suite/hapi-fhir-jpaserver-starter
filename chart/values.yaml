@@ -12,6 +12,13 @@ global:
   tls:
     configMapName: ""
 
+# Imagen usada por el initContainer que genera el truststore JVM a partir de los
+# certificados en global.tls.certificates (necesita `keytool`; la imagen final del
+# contenedor principal es distroless y no lo tiene).
+tls:
+  truststoreInitImage: "eclipse-temurin:21-jre"
+  truststorePassword: "changeit"
+
 replicaCount: 1
 
 image:
@@ -121,6 +128,13 @@ applicationYaml: |
         - https://unitsofmeasure.org/*
         - http://loinc.org/*
         - https://loinc.org/*
+
+  sso:
+    oidc:
+      public-paths:
+        - /fhir/swagger-ui/**
+        - /fhir/api-docs/**
+        - /fhir/metadata
 
   logging:
     level:

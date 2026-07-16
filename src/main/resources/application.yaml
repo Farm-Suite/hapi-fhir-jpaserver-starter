@@ -4,8 +4,6 @@ server:
   port: 8081
 
 spring:
-  profiles:
-    active: sso-local
   main:
     allow-bean-definition-overriding: false
     allow-circular-references: true
@@ -77,9 +75,10 @@ sso:
     public-paths:
       - /fhir/swagger-ui/**
       - /fhir/api-docs/**
+      - /fhir/metadata
 
 
 logging:
   level:
-    root: DEBUG
+    root: INFO
     org.farmsuite: DEBUG

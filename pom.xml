@@ -417,7 +417,6 @@
             <version>${spring.ai.version}</version>
         </dependency>
 
-        <!--implementation("org.springframework.ai:spring-ai-starter-mcp-server-webmvc:1.1.0-M1")-->
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-mcp-server</artifactId>
@@ -810,7 +809,7 @@
                         <configuration>
                             <images>
                                 <image>
-                                    <name>hapi-fhir-jpaserver-start:local</name>
+                                    <name>onsystem/hapi-fhir:latest</name>
                                     <build>
                                         <dockerFile>${project.basedir}/Dockerfile.local</dockerFile>
                                         <contextDir>${project.basedir}</contextDir>

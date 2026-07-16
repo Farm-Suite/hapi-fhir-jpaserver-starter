@@ -28,14 +28,37 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- if .Values.global.tls.configMapName }}
+      initContainers:
+        - name: init-truststore
+          image: {{ .Values.tls.truststoreInitImage }}
+          command:
+            - sh
+            - -c
+            - |
+              cp "$JAVA_HOME/lib/security/cacerts" /truststore/cacerts
+              for cert in /tls-certs/*.crt; do
+                keytool -importcert -noprompt -trustcacerts \
+                  -alias "$(basename "$cert" .crt)" \
+                  -file "$cert" \
+                  -keystore /truststore/cacerts \
+                  -storepass "{{ .Values.tls.truststorePassword }}"
+              done
+          volumeMounts:
+            - name: tls-certs
+              mountPath: /tls-certs
+              readOnly: true
+            - name: truststore
+              mountPath: /truststore
+      {{- end }}
       containers:
         - name: {{ .Chart.Name }}
           image: "onsystem/hapi-fhir:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.global.image.imagePullPolicy }}
           {{- if .Values.global.tls.configMapName }}
           env:
-            - name: SERVICE_BINDING_ROOT
-              value: "/bindings"
+            - name: JAVA_TOOL_OPTIONS
+              value: "-Djavax.net.ssl.trustStore=/truststore/cacerts -Djavax.net.ssl.trustStorePassword={{ .Values.tls.truststorePassword }}"
           {{- end }}
           ports:
             - name: http
@@ -64,8 +87,9 @@ spec:
               mountPath: /app/config/application.yaml
               subPath: application.yaml
             {{- if .Values.global.tls.configMapName }}
-            - name: tls-certs
-              mountPath: /bindings/farmsuite-ca
+            - name: truststore
+              mountPath: /truststore
+              readOnly: true
             {{- end }}
             {{- with .Values.volumeMounts }}
             {{- toYaml . | nindent 12 }}
@@ -78,6 +102,8 @@ spec:
         - name: tls-certs
           configMap:
             name: {{ .Values.global.tls.configMapName }}
+        - name: truststore
+          emptyDir: {}
         {{- end }}
         {{- with .Values.volumes }}
         {{- toYaml . | nindent 8 }}
