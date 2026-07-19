@@ -136,6 +136,10 @@ applicationYaml: |
         - /fhir/api-docs/**
         - /fhir/metadata
 
+  cors:
+    allowed-origins:
+      - "*"
+
   logging:
     level:
       root: INFO
