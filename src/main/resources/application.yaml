@@ -63,7 +63,7 @@ hapi:
       partitioning_include_in_search_hashes: false
       request_tenant_partitioning_mode: true
       conditional-create-duplicate-identifiers-enabled: false
-      database-partition-mode-enabled: true
+      database-partition-mode-enabled: false
     custom-interceptor-classes:
       - org.farmsuite.fhir.interceptors.RequestDefaultTenantInterceptor
     custom-bean-packages: org.farmsuite.fhir
