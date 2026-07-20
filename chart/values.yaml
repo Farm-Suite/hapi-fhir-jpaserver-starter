@@ -63,6 +63,16 @@ autoscaling:
 volumes: []
 volumeMounts: []
 
+# Índice Lucene de Hibernate Search (hibernate.search.backend.directory.root en
+# applicationYaml, /tmp/lucenefiles). Sin esto, cada reinicio del pod lo borra y
+# hay que llamar a $reindex-terminology a mano para que $expand/$validate/snapshot
+# con binding required vuelvan a funcionar.
+persistence:
+  enabled: false
+  size: 1Gi
+  accessMode: ReadWriteOnce
+  storageClassName: ""
+
 tolerations: []
 
 affinity: {}

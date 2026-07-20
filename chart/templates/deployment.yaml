@@ -91,6 +91,10 @@ spec:
               mountPath: /truststore
               readOnly: true
             {{- end }}
+            {{- if .Values.persistence.enabled }}
+            - name: lucene-index
+              mountPath: /tmp/lucenefiles
+            {{- end }}
             {{- with .Values.volumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -104,6 +108,11 @@ spec:
             name: {{ .Values.global.tls.configMapName }}
         - name: truststore
           emptyDir: {}
+        {{- end }}
+        {{- if .Values.persistence.enabled }}
+        - name: lucene-index
+          persistentVolumeClaim:
+            claimName: {{ include "chart.fullname" . }}-lucene
         {{- end }}
         {{- with .Values.volumes }}
         {{- toYaml . | nindent 8 }}

@@ -32,6 +32,8 @@ spring:
 hapi:
   fhir:
     fhir_version: R5
+    client_id_strategy: ANY
+    server_id_strategy: UUID
     openapi_enabled: true
     narrative_enabled: false
     bulk_export_enabled: false
