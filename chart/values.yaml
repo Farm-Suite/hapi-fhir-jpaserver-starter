@@ -10,7 +10,7 @@ global:
     hostnames:
       - 'farmsuite.org'
   tls:
-    configMapName: ""
+    configMapName: "farmsuite-tls-certs"
 
 # Imagen usada por el initContainer que genera el truststore JVM a partir de los
 # certificados en global.tls.certificates (necesita `keytool`; la imagen final del
@@ -36,10 +36,10 @@ service:
 
 resources:
   requests:
-    memory: "1Gi"
-    cpu: "250m"
-  limits:
     memory: "2Gi"
+    cpu: "500m"
+  limits:
+    memory: "4Gi"
     cpu: "1000m"
 
 livenessProbe:
@@ -68,7 +68,7 @@ volumeMounts: []
 # hay que llamar a $reindex-terminology a mano para que $expand/$validate/snapshot
 # con binding required vuelvan a funcionar.
 persistence:
-  enabled: false
+  enabled: true
   size: 1Gi
   accessMode: ReadWriteOnce
   storageClassName: ""
@@ -108,6 +108,16 @@ applicationYaml: |
           default_schema: fhir
           hbm2ddl:
             auto: update
+          search:
+            enabled: true
+            backend:
+              type: lucene
+              analysis:
+                configurer: ca.uhn.fhir.jpa.search.HapiHSearchAnalysisConfigurers$HapiLuceneAnalysisConfigurer
+              directory:
+                type: local-filesystem
+                root: /tmp/lucenefiles
+              lucene_version: lucene_current
 
   hapi:
     fhir:
@@ -138,9 +148,20 @@ applicationYaml: |
         - https://unitsofmeasure.org/*
         - http://loinc.org/*
         - https://loinc.org/*
+      partitioning:
+        allow_references_across_partitions: true
+        partitioning_include_in_search_hashes: false
+        request_tenant_partitioning_mode: true
+        conditional-create-duplicate-identifiers-enabled: false
+        database-partition-mode-enabled: false
+      custom-interceptor-classes:
+        - org.farmsuite.fhir.interceptors.RequestDefaultTenantInterceptor
+      custom-bean-packages: org.farmsuite.fhir
 
   sso:
     oidc:
+      enabled: true
+      issuer-uri: https://farmsuite.org/auth/realms/farmsuite
       public-paths:
         - /fhir/swagger-ui/**
         - /fhir/api-docs/**
