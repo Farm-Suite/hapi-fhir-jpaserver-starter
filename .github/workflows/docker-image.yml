@@ -10,6 +10,11 @@ name: Docker Image — hapi-fhir-jpaserver-starter
 #   - pull_request (con la label "docker-preview"): tag = pr-<numero-de-PR>
 #   - push a master: tags = latest + versión del pom
 #   - workflow_dispatch: tag = el que el usuario escriba en el input `tag`
+#
+# El Dockerfile hace RUN --mount=type=secret github_actor/github_token para
+# autenticar mvn dentro del build contra Farm-Suite/SSO (GitHub Packages).
+# GH_PACKAGES_TOKEN debe ser un PAT con scope read:packages: el GITHUB_TOKEN
+# automático de Actions no puede leer paquetes publicados por otro repo del org.
 
 on:
   pull_request:
@@ -102,3 +107,6 @@ jobs:
           target: default
           push: true
           tags: ${{ steps.dockerfile_tags.outputs.list }}
+          secrets: |
+            github_actor=${{ github.actor }}
+            github_token=${{ secrets.GH_PACKAGES_TOKEN }}
