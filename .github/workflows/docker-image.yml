@@ -23,4 +23,6 @@ jobs:
       build_mode: dockerfile
       dockerfile_target: default
       manual_tag: ${{ inputs.tag }}
-    secrets: inherit
+    secrets:
+      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
