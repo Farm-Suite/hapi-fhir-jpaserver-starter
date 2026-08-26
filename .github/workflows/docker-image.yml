@@ -2,6 +2,14 @@ name: Docker Image — hapi-fhir-jpaserver-starter
 
 # Empuja a onsystem/hapi-fhir-jpaserver-starter (namespace propio de FarmSuite),
 # NO al docker.io/hapiproject/hapi que usa build-images.yaml (ese es del upstream).
+#
+# Autocontenido (no usa la reusable workflow de Farm-Suite/Infra): este repo es
+# público e Infra es privado, y GitHub no permite que un repo público consuma
+# una reusable workflow de un repo privado. Misma lógica de tags que
+# Farm-Suite/Infra/.github/workflows/docker-image.yml en build_mode=dockerfile:
+#   - pull_request (con la label "docker-preview"): tag = pr-<numero-de-PR>
+#   - push a master: tags = latest + versión del pom
+#   - workflow_dispatch: tag = el que el usuario escriba en el input `tag`
 
 on:
   pull_request:
@@ -16,13 +24,81 @@ on:
         type: string
 
 jobs:
-  docker:
-    uses: Farm-Suite/Infra/.github/workflows/docker-image.yml@main
-    with:
-      image_name: onsystem/hapi-fhir-jpaserver-starter
-      build_mode: dockerfile
-      dockerfile_target: default
-      manual_tag: ${{ inputs.tag }}
-    secrets:
-      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+  build-and-push:
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'docker-preview'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    concurrency:
+      group: docker-image-hapi-fhir-jpaserver-starter-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Set up Java
+        if: github.event_name == 'push'
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Extract pom.xml version
+        if: github.event_name == 'push'
+        id: pom
+        run: |
+          VERSION=$(mvn -q help:evaluate -Dexpression=project.version -DforceStdout)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Compute tags for this run
+        id: tags
+        run: |
+          case "${{ github.event_name }}" in
+            workflow_dispatch)
+              TAGS="${{ inputs.tag }}"
+              ;;
+            pull_request)
+              TAGS="pr-${{ github.event.pull_request.number }}"
+              ;;
+            push)
+              TAGS="latest,${{ steps.pom.outputs.version }}"
+              ;;
+          esac
+          if [ -z "$TAGS" ]; then
+            echo "No se pudo determinar ningún tag para el evento ${{ github.event_name }}" >&2
+            exit 1
+          fi
+          echo "csv=$TAGS" >> "$GITHUB_OUTPUT"
+
+      - name: Format tags for build-push-action
+        id: dockerfile_tags
+        run: |
+          {
+            echo "list<<EOF"
+            IFS=',' read -ra TAGS <<< "${{ steps.tags.outputs.csv }}"
+            for TAG in "${TAGS[@]}"; do
+              echo "onsystem/hapi-fhir-jpaserver-starter:$TAG"
+            done
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build and push image (Dockerfile)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: default
+          push: true
+          tags: ${{ steps.dockerfile_tags.outputs.list }}
