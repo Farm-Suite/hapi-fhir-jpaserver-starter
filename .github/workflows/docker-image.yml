@@ -1,4 +1,4 @@
-name: Docker PR Preview — hapi-fhir-jpaserver-starter
+name: Docker Image — hapi-fhir-jpaserver-starter
 
 # Empuja a onsystem/hapi-fhir-jpaserver-starter (namespace propio de FarmSuite),
 # NO al docker.io/hapiproject/hapi que usa build-images.yaml (ese es del upstream).
@@ -6,12 +6,21 @@ name: Docker PR Preview — hapi-fhir-jpaserver-starter
 on:
   pull_request:
     types: [labeled, synchronize, opened, reopened]
+  push:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag de la imagen a publicar"
+        required: true
+        type: string
 
 jobs:
-  docker-preview:
-    uses: Farm-Suite/Infra/.github/workflows/docker-pr-build.yml@main
+  docker:
+    uses: Farm-Suite/Infra/.github/workflows/docker-image.yml@main
     with:
       image_name: onsystem/hapi-fhir-jpaserver-starter
       build_mode: dockerfile
       dockerfile_target: default
+      manual_tag: ${{ inputs.tag }}
     secrets: inherit
