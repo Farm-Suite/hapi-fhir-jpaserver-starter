@@ -1,0 +1,17 @@
+name: Docker PR Preview — hapi-fhir-jpaserver-starter
+
+# Empuja a onsystem/hapi-fhir-jpaserver-starter (namespace propio de FarmSuite),
+# NO al docker.io/hapiproject/hapi que usa build-images.yaml (ese es del upstream).
+
+on:
+  pull_request:
+    types: [labeled, synchronize, opened, reopened]
+
+jobs:
+  docker-preview:
+    uses: Farm-Suite/Infra/.github/workflows/docker-pr-build.yml@main
+    with:
+      image_name: onsystem/hapi-fhir-jpaserver-starter
+      build_mode: dockerfile
+      dockerfile_target: default
+    secrets: inherit
