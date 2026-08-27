@@ -5,7 +5,7 @@ server:
 
 spring:
   main:
-    allow-bean-definition-overriding: false
+    allow-bean-definition-overriding: true
     allow-circular-references: true
     banner-mode: off
   autoconfigure:
