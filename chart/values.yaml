@@ -22,7 +22,7 @@ tls:
 replicaCount: 1
 
 image:
-  tag: "latests"
+  tag: "latest"
 
 nameOverride: ""
 fullnameOverride: ""
