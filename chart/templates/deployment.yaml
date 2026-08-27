@@ -53,7 +53,7 @@ spec:
       {{- end }}
       containers:
         - name: {{ .Chart.Name }}
-          image: "onsystem/hapi-fhir:{{ .Values.image.tag }}"
+          image: "onsystem/hapi-fhir-jpaserver-starter:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.global.image.imagePullPolicy }}
           {{- if .Values.global.tls.configMapName }}
           env:

@@ -22,7 +22,7 @@ tls:
 replicaCount: 1
 
 image:
-  tag: "latest"
+  tag: "latests"
 
 nameOverride: ""
 fullnameOverride: ""
@@ -174,3 +174,4 @@ applicationYaml: |
   logging:
     level:
       root: INFO
+      org.farmsuite: DEBUG
