@@ -1,4 +1,4 @@
-package org.farmsuite.fhir;
+package org.farmsuite.fhir.config;
 
 import ca.uhn.fhir.rest.api.server.RequestDetails;
 import ca.uhn.fhir.rest.server.interceptor.auth.AuthorizationInterceptor;
