@@ -1,6 +1,7 @@
 package org.farmsuite.fhir.interceptors;
 
 import ca.uhn.fhir.interceptor.api.Hook;
+import ca.uhn.fhir.interceptor.api.IInterceptorService;
 import ca.uhn.fhir.interceptor.api.Interceptor;
 import ca.uhn.fhir.interceptor.api.Pointcut;
 import ca.uhn.fhir.interceptor.model.RequestPartitionId;
@@ -8,6 +9,7 @@ import ca.uhn.fhir.rest.api.server.RequestDetails;
 import ca.uhn.fhir.rest.api.server.SystemRequestDetails;
 import ca.uhn.fhir.rest.server.exceptions.ForbiddenOperationException;
 import ca.uhn.fhir.rest.server.servlet.ServletRequestDetails;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.farmsuite.sso.session.UserSessionRepository;
@@ -26,6 +28,25 @@ public class RequestDefaultTenantInterceptor {
 	);
 
 	private final UserSessionRepository userSessionRepository;
+
+	// custom-interceptor-classes (ver StarterJpaConfig#registerCustomInterceptors)
+	// solo registra este interceptor en el IInterceptorService del RestfulServer,
+	// que es lo que ServletRequestDetails#getInterceptorBroadcaster() expone para
+	// peticiones HTTP reales (RestfulServer#newServletRequestDetails construye
+	// `new ServletRequestDetails(getInterceptorService())`). Las llamadas internas
+	// de sistema (p. ej. JpaPersistedResourceValidationSupport#fetchAllStructureDefinitions,
+	// que arma un `new SystemRequestDetails()` sin RestfulServer detrás) resuelven
+	// su broadcaster contra el bean `jpaInterceptorService` de la capa JPA en su
+	// lugar (ver JpaConfig#jpaInterceptorService) — donde este interceptor nunca
+	// llegaba a estar registrado. Sin este @PostConstruct, esas llamadas de sistema
+	// no encuentran ningún hook para STORAGE_PARTITION_IDENTIFY_ANY y HAPI lanza
+	// HAPI-1319 ("No interceptor provided a value").
+	private final IInterceptorService jpaInterceptorService;
+
+	@PostConstruct
+	public void registerOnJpaInterceptorService() {
+		jpaInterceptorService.registerInterceptor(this);
+	}
 
 	@Hook(Pointcut.STORAGE_PARTITION_IDENTIFY_ANY)
 	public RequestPartitionId identify(RequestDetails theRequestDetails, ServletRequestDetails theServletRequestDetails) {
