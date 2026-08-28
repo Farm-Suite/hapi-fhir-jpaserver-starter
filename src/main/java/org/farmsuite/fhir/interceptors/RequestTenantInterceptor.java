@@ -21,7 +21,7 @@ import java.util.Set;
 @Component
 @Interceptor
 @RequiredArgsConstructor
-public class RequestDefaultTenantInterceptor {
+public class RequestTenantInterceptor {
 
 	private static final Set<String> DEFAULT_TENANT_RESOURCES = Set.of(
 		"Practitioner"
@@ -66,31 +66,19 @@ public class RequestDefaultTenantInterceptor {
 			return RequestPartitionId.allPartitions();
 		}
 
-		RequestPartitionId resolvedPartition = null;
+		String tenantId = theRequestDetails.getTenantId();
+
+		RequestPartitionId resolvedPartition;
 		if (DEFAULT_TENANT_RESOURCES.contains(resourceName)) {
 			log.debug("Resource {} forced to DEFAULT partition", resourceName);
-			resolvedPartition = RequestPartitionId.defaultPartition();
+			return RequestPartitionId.defaultPartition();
 		} else {
-			String tenantId = theRequestDetails.getTenantId();
 			log.debug("Resource {} resolved to tenant {}", resourceName, tenantId);
 			resolvedPartition = RequestPartitionId.fromPartitionName(tenantId);
 		}
 
 		log.debug("Resolved partition {}", resolvedPartition);
-		enforceTenantAccess(resolvedPartition);
+
 		return resolvedPartition;
-	}
-
-	private void enforceTenantAccess(RequestPartitionId partition) {
-		String partitionName = partition.isDefaultPartition() ? null : partition.getFirstPartitionNameOrNull();
-
-		boolean allowed = userSessionRepository.getUserSession()
-			.map(session -> session.canAccessTenant(partitionName))
-			.orElse(false);
-
-		if (!allowed) {
-			log.warn("Access denied to partition {} for current session", partitionName);
-			throw new ForbiddenOperationException("No tiene acceso al tenant solicitado");
-		}
 	}
 }
