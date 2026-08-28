@@ -68,9 +68,18 @@ public class WebConfig {
 	}
 
 
+	// Nombre de bean distinto a propósito: el @Bean estándar de HAPI en
+	// ca.uhn.fhir.jpa.config.JpaConfig se llama igual (requestPartitionHelperService,
+	// por convención el nombre del método). Con
+	// spring.main.allow-bean-definition-overriding=true, un choque de nombres se
+	// resuelve por "el que se registra último gana" — NO por @Primary (@Primary solo
+	// desempata entre beans con nombres DISTINTOS del mismo tipo). Con el mismo
+	// nombre, JpaConfig se procesa después y pisa esta definición en silencio, así
+	// que en runtime queda activo el RequestPartitionHelperSvc estándar de HAPI y
+	// este @Primary nunca llega a evaluarse.
 	@Bean
 	@Primary
-	public IRequestPartitionHelperSvc requestPartitionHelperService() {
+	public IRequestPartitionHelperSvc farmSuiteRequestPartitionHelperService() {
 		return new RequestPartitionableResourcesHelper();
 	}
 }
