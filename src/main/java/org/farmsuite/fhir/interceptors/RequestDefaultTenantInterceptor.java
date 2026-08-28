@@ -5,6 +5,7 @@ import ca.uhn.fhir.interceptor.api.Interceptor;
 import ca.uhn.fhir.interceptor.api.Pointcut;
 import ca.uhn.fhir.interceptor.model.RequestPartitionId;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
+import ca.uhn.fhir.rest.api.server.SystemRequestDetails;
 import ca.uhn.fhir.rest.server.exceptions.ForbiddenOperationException;
 import ca.uhn.fhir.rest.server.servlet.ServletRequestDetails;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,20 @@ public class RequestDefaultTenantInterceptor {
 	@Hook(Pointcut.STORAGE_PARTITION_IDENTIFY_ANY)
 	public RequestPartitionId identify(RequestDetails theRequestDetails, ServletRequestDetails theServletRequestDetails) {
 		String resourceName = theRequestDetails.getResourceName();
+
+		// Llamadas internas de HAPI sin sesión de usuario ni tenant real detrás
+		// (p. ej. JpaPersistedResourceValidationSupport#fetchAllStructureDefinitions,
+		// invocada en cada $metadata para listar los profiles soportados vía
+		// `new SystemRequestDetails()`). Al hacer CodeSystem/ConceptMap/
+		// StructureDefinition/ValueSet particionables (ver RequestPartitionableResourcesHelper),
+		// esta búsqueda de sistema dejó de resolverse sola a DEFAULT y necesita que
+		// algún interceptor le dé una partición explícita — no hay tenant que
+		// comprobar aquí, así que se busca en todas las particiones en vez de fallar
+		// con HAPI-1319 ("No interceptor provided a value").
+		if (theRequestDetails instanceof SystemRequestDetails && theRequestDetails.getTenantId() == null) {
+			log.debug("System call without tenant for resource {} -> allPartitions", resourceName);
+			return RequestPartitionId.allPartitions();
+		}
 
 		RequestPartitionId resolvedPartition = null;
 		if (DEFAULT_TENANT_RESOURCES.contains(resourceName)) {
