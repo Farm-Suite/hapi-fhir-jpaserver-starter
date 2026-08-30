@@ -123,6 +123,9 @@ applicationYaml: |
     fhir:
       fhir_version: R5
       openapi_enabled: true
+      client_id_strategy: ANY
+      server_id_strategy: UUID
+      enable_index_missing_fields: true
       narrative_enabled: false
       bulk_export_enabled: false
       bulk_import_enabled: false
@@ -155,7 +158,7 @@ applicationYaml: |
         conditional-create-duplicate-identifiers-enabled: false
         database-partition-mode-enabled: false
       custom-interceptor-classes:
-        - org.farmsuite.fhir.interceptors.RequestDefaultTenantInterceptor
+        - org.farmsuite.fhir.interceptors.RequestTenantInterceptor
       custom-bean-packages: org.farmsuite.fhir
 
   sso:
