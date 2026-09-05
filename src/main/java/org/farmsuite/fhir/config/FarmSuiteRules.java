@@ -56,21 +56,37 @@ public class FarmSuiteRules extends AuthorizationInterceptor {
 
 		return userSessionRepository.getUserSession()
 			.map(this::buildRulesForSession)
-			.orElseGet(() -> new RuleBuilder().denyAll("no-session").build());
+			.orElseGet(FarmSuiteRules::anonymousRules);
+	}
+
+	/**
+	 * Sin sesión resuelta (ej. una request anónima a un public-path como
+	 * {@code sso.oidc.public-paths: /fhir/metadata}, que Spring Security ya deja pasar sin
+	 * autenticar). El AuthorizationInterceptor es una capa aparte que no sabe nada de esos
+	 * public-paths, así que hay que permitir $metadata explícitamente acá también — si no,
+	 * cae al denyAll() aunque la capa de Spring Security ya lo consideraba público.
+	 */
+	private static List<IAuthRule> anonymousRules() {
+		return new RuleBuilder().allow().metadata().andThen().denyAll("no-session").build();
 	}
 
 	private List<IAuthRule> buildRulesForSession(UserSessionModel session) {
+		IAuthRuleBuilder builder = new RuleBuilder();
+		// $metadata siempre permitido, incluso sin permisos resueltos — lo necesita cualquier
+		// cliente autenticado para introspeccionar el CapabilityStatement (ver
+		// fhir-resource-browser en suite-front, que lo cruza con Configuration-MIC para
+		// armar los filtros de búsqueda).
+		builder = builder.allow().metadata().andThen();
+		builder = applyPractitionerSelfServiceRules(builder, session);
+
 		String tenantId = session.getTenantId();
 		List<String> rawPermissions = session.getPermission();
 
 		if (tenantId == null || tenantId.isBlank() || rawPermissions == null || rawPermissions.isEmpty()) {
-			log.warn("Usuario '{}' sin tenantId o sin permisos resueltos en el token — denegando todo",
-				session.getUsername());
-			return new RuleBuilder().denyAll("no-permissions").build();
+			log.warn("Usuario '{}' sin tenantId o sin permisos resueltos en el token — solo se aplican metadata "
+				+ "y las reglas estructurales de Practitioner", session.getUsername());
+			return builder.denyAll("no-permissions").build();
 		}
-
-		IAuthRuleBuilder builder = new RuleBuilder();
-		builder = applyPractitionerSelfServiceRules(builder, session);
 
 		for (String raw : rawPermissions) {
 			builder = applyPermission(builder, raw, tenantId);
