@@ -159,6 +159,7 @@ applicationYaml: |
         database-partition-mode-enabled: false
       custom-interceptor-classes:
         - org.farmsuite.fhir.interceptors.RequestTenantInterceptor
+        - org.farmsuite.fhir.config.FarmSuiteRules
       custom-bean-packages: org.farmsuite.fhir
 
   sso:
