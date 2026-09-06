@@ -101,11 +101,16 @@ public class FarmSuiteRules extends AuthorizationInterceptor {
 	 * de servicio (ya cubierta por {@code isAdmin()} en {@link #buildRuleList}) puede crear un
 	 * Practitioner, un usuario humano solo puede actualizar el suyo propio, y cualquier usuario
 	 * humano autenticado puede leer/buscar cualquier Practitioner (directorio de profesionales,
-	 * necesario p. ej. para buscar a quién invitar a un tenant — Practitioner no es un dato
-	 * scoped al tenant, vive siempre en DEFAULT). Se evalúan antes que el bucle de permisos
-	 * porque HAPI aplica la primera regla de la lista que matchee la request (ver
-	 * {@code AuthorizationInterceptor#applyRulesAndFailIfDeny}) — así ninguna plantilla de rol
-	 * puede sobreescribir esto por accidente.
+	 * necesario p. ej. para buscar a quién invitar a un tenant). Sin {@code forTenantIds(...)} a
+	 * propósito: Practitioner no es un dato scoped a un tenant (vive siempre en DEFAULT, ver
+	 * RequestTenantInterceptor), pero el chequeo de partición de esta regla compara contra la
+	 * partición declarada en la URL de la request, no contra la partición ya resuelta/forzada por
+	 * ese interceptor — así que exigir DEFAULT acá rompía la lectura hecha vía
+	 * {@code /fhir/<tenant>/Practitioner/...} (la forma real en que la usa suite-front),
+	 * confirmado con un 403 real que no aparecía pidiendo lo mismo por {@code /fhir/DEFAULT/...}.
+	 * Se evalúan antes que el bucle de permisos porque HAPI aplica la primera regla de la lista
+	 * que matchee la request (ver {@code AuthorizationInterceptor#applyRulesAndFailIfDeny}) — así
+	 * ninguna plantilla de rol puede sobreescribir esto por accidente.
 	 */
 	private IAuthRuleBuilder applyPractitionerSelfServiceRules(IAuthRuleBuilder builder, UserSessionModel session) {
 		builder = builder.deny().create()
@@ -115,7 +120,6 @@ public class FarmSuiteRules extends AuthorizationInterceptor {
 		builder = builder.allow().read()
 			.resourcesOfType(Practitioner.class)
 			.withAnyId()
-			.forTenantIds(DEFAULT_PARTITION)
 			.andThen();
 
 		String practitionerId = session.getPractitionerId();
