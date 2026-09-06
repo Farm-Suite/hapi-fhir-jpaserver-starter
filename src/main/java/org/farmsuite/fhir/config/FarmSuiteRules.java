@@ -99,14 +99,23 @@ public class FarmSuiteRules extends AuthorizationInterceptor {
 	 * Invariante estructural de Practitioner, independiente de lo que diga el claim
 	 * {@code permissions} — ninguna plantilla de rol puede aflojar esto: nadie salvo la cuenta
 	 * de servicio (ya cubierta por {@code isAdmin()} en {@link #buildRuleList}) puede crear un
-	 * Practitioner, y un usuario humano solo puede actualizar el suyo propio. Se evalúan antes
-	 * que el bucle de permisos porque HAPI aplica la primera regla de la lista que matchee la
-	 * request (ver {@code AuthorizationInterceptor#applyRulesAndFailIfDeny}) — así ninguna
-	 * plantilla de rol puede sobreescribir esto por accidente.
+	 * Practitioner, un usuario humano solo puede actualizar el suyo propio, y cualquier usuario
+	 * humano autenticado puede leer/buscar cualquier Practitioner (directorio de profesionales,
+	 * necesario p. ej. para buscar a quién invitar a un tenant — Practitioner no es un dato
+	 * scoped al tenant, vive siempre en DEFAULT). Se evalúan antes que el bucle de permisos
+	 * porque HAPI aplica la primera regla de la lista que matchee la request (ver
+	 * {@code AuthorizationInterceptor#applyRulesAndFailIfDeny}) — así ninguna plantilla de rol
+	 * puede sobreescribir esto por accidente.
 	 */
 	private IAuthRuleBuilder applyPractitionerSelfServiceRules(IAuthRuleBuilder builder, UserSessionModel session) {
 		builder = builder.deny().create()
 			.resourcesOfType(Practitioner.class).withAnyId()
+			.andThen();
+
+		builder = builder.allow().read()
+			.resourcesOfType(Practitioner.class)
+			.withAnyId()
+			.forTenantIds(DEFAULT_PARTITION)
 			.andThen();
 
 		String practitionerId = session.getPractitionerId();
