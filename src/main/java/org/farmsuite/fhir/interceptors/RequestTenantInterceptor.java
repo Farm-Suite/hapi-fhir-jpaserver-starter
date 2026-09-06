@@ -4,6 +4,7 @@ import ca.uhn.fhir.interceptor.api.Hook;
 import ca.uhn.fhir.interceptor.api.IInterceptorService;
 import ca.uhn.fhir.interceptor.api.Interceptor;
 import ca.uhn.fhir.interceptor.api.Pointcut;
+import ca.uhn.fhir.interceptor.model.ReadPartitionIdRequestDetails;
 import ca.uhn.fhir.interceptor.model.RequestPartitionId;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
 import ca.uhn.fhir.rest.api.server.SystemRequestDetails;
@@ -13,6 +14,7 @@ import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.farmsuite.sso.session.UserSessionRepository;
+import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.springframework.stereotype.Component;
 
 import java.util.Set;
@@ -48,10 +50,35 @@ public class RequestTenantInterceptor {
 		jpaInterceptorService.registerInterceptor(this);
 	}
 
-	@Hook(Pointcut.STORAGE_PARTITION_IDENTIFY_ANY)
-	public RequestPartitionId identify(RequestDetails theRequestDetails, ServletRequestDetails theServletRequestDetails) {
-		String resourceName = theRequestDetails.getResourceName();
+	// Antes un único método hookeado en STORAGE_PARTITION_IDENTIFY_ANY. Ese pointcut es un
+	// catch-all: por diseño de HAPI nunca recibe ReadPartitionIdRequestDetails, así que cuando el
+	// motor de búsqueda resuelve internamente a qué partición pertenece un id REFERENCIADO (p. ej.
+	// al evaluar PractitionerRole?practitioner=Practitioner/{id}, HAPI necesita saber en qué
+	// partición vive ese Practitioner) el hook solo veía el resourceType de la request de AFUERA
+	// ("PractitionerRole"), nunca el del recurso referenciado ("Practitioner") — por eso esa
+	// búsqueda cross-partition nunca encontraba nada aunque el dato estuviera bien guardado.
+	// Partido en los dos pointcuts operacionales reales de HAPI (_CREATE y _READ — este último
+	// cubre todo lo que no es un create: read/vread, search, history, $reindex, y la resolución
+	// interna de arriba) para que _READ SÍ reciba ReadPartitionIdRequestDetails.getResourceType(),
+	// que en ese caso interno correctamente dice "Practitioner".
+	@Hook(Pointcut.STORAGE_PARTITION_IDENTIFY_CREATE)
+	public RequestPartitionId identifyForCreate(
+			IBaseResource theResource, RequestDetails theRequestDetails, ServletRequestDetails theServletRequestDetails) {
+		return resolvePartition(theRequestDetails, theRequestDetails.getResourceName());
+	}
 
+	@Hook(Pointcut.STORAGE_PARTITION_IDENTIFY_READ)
+	public RequestPartitionId identifyForRead(
+			RequestDetails theRequestDetails,
+			ServletRequestDetails theServletRequestDetails,
+			ReadPartitionIdRequestDetails theDetails) {
+		String resourceName = theDetails.getResourceType() != null
+				? theDetails.getResourceType()
+				: theRequestDetails.getResourceName();
+		return resolvePartition(theRequestDetails, resourceName);
+	}
+
+	private RequestPartitionId resolvePartition(RequestDetails theRequestDetails, String resourceName) {
 		// Llamadas internas de HAPI sin sesión de usuario ni tenant real detrás
 		// (p. ej. JpaPersistedResourceValidationSupport#fetchAllStructureDefinitions,
 		// invocada en cada $metadata para listar los profiles soportados vía
