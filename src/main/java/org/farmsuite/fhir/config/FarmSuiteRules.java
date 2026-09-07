@@ -13,8 +13,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.farmsuite.sso.session.UserSessionModel;
 import org.farmsuite.sso.session.UserSessionRepository;
 import org.hl7.fhir.instance.model.api.IBaseResource;
+import org.hl7.fhir.r5.model.CodeSystem;
 import org.hl7.fhir.r5.model.IdType;
 import org.hl7.fhir.r5.model.Practitioner;
+import org.hl7.fhir.r5.model.StructureDefinition;
+import org.hl7.fhir.r5.model.ValueSet;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -78,13 +81,15 @@ public class FarmSuiteRules extends AuthorizationInterceptor {
 		// armar los filtros de búsqueda).
 		builder = builder.allow().metadata().andThen();
 		builder = applyPractitionerSelfServiceRules(builder, session);
+		builder = applyReferenceDataReadRules(builder);
 
 		String tenantId = session.getTenantId();
 		List<String> rawPermissions = session.getPermission();
 
 		if (tenantId == null || tenantId.isBlank() || rawPermissions == null || rawPermissions.isEmpty()) {
-			log.warn("Usuario '{}' sin tenantId o sin permisos resueltos en el token — solo se aplican metadata "
-				+ "y las reglas estructurales de Practitioner", session.getUsername());
+			log.warn("Usuario '{}' sin tenantId o sin permisos resueltos en el token — solo se aplican metadata, "
+				+ "las reglas estructurales de Practitioner y la lectura de datos de referencia",
+				session.getUsername());
 			return builder.denyAll("no-permissions").build();
 		}
 
@@ -130,6 +135,45 @@ public class FarmSuiteRules extends AuthorizationInterceptor {
 				.forTenantIds(DEFAULT_PARTITION)
 				.andThen();
 		}
+
+		return builder;
+	}
+
+	/**
+	 * Datos de referencia del sistema — {@code StructureDefinition}, {@code ValueSet},
+	 * {@code CodeSystem} — legibles por cualquier usuario autenticado, con independencia de la
+	 * plantilla de rol. Viven siempre en la partición DEFAULT (versionados a mano en
+	 * {@code Infra/execute/fhir/}, ver CLAUDE.md raíz) y no son datos de un tenant: son lo que
+	 * necesita cualquier tenant para pintar un formulario (el perfil que define sus campos) o un
+	 * combo (el ValueSet/CodeSystem que resuelve sus opciones vía {@code $expand}). Antes de esta
+	 * regla, ninguna plantilla de rol podía conceder ese acceso — {@code forTenantIds(tenantId)}
+	 * en {@link #applyPermission} solo cubre la partición del tenant en sesión, nunca DEFAULT — así
+	 * que ni siquiera el dueño de un tenant con permiso {@code *.rscud} podía crear un recurso ni
+	 * expandir un combo.
+	 *
+	 * <p>Mismo patrón que {@link #applyPractitionerSelfServiceRules}: estructural, antes del bucle
+	 * de permisos, y sin {@code forTenantIds(...)} — DEFAULT es la única partición real de estos
+	 * recursos, pero exigirlo aquí reproduciría el bug ya confirmado con Practitioner (la regla
+	 * compara contra la partición de la URL de la request, no contra la ya resuelta por
+	 * {@code RequestTenantInterceptor}).
+	 *
+	 * <p>{@code $expand} no queda cubierto por {@code allow().read()} — HAPI lo trata como
+	 * operación, no como lectura — de ahí la regla aparte con {@code operation().named("$expand")}.
+	 */
+	private IAuthRuleBuilder applyReferenceDataReadRules(IAuthRuleBuilder builder) {
+		for (Class<? extends IBaseResource> resourceType :
+				List.of(StructureDefinition.class, ValueSet.class, CodeSystem.class)) {
+			builder = builder.allow().read()
+				.resourcesOfType(resourceType)
+				.withAnyId()
+				.andThen();
+		}
+
+		builder = builder.allow().operation()
+			.named("$expand")
+			.onType(ValueSet.class)
+			.andAllowAllResponses()
+			.andThen();
 
 		return builder;
 	}
