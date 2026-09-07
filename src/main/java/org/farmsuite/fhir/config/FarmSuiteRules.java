@@ -169,9 +169,11 @@ public class FarmSuiteRules extends AuthorizationInterceptor {
 				.andThen();
 		}
 
+		// La request real es instancia, `/ValueSet/{id}/$expand` (confirmado con un 403 real en
+		// esa forma) — `onType()` solo matchea la forma sin id, `/ValueSet/$expand`.
 		builder = builder.allow().operation()
 			.named("$expand")
-			.onType(ValueSet.class)
+			.onInstancesOfType(ValueSet.class)
 			.andAllowAllResponses()
 			.andThen();
 
