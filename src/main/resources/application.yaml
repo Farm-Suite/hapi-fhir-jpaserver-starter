@@ -70,6 +70,7 @@ hapi:
     custom-interceptor-classes:
       - org.farmsuite.fhir.interceptors.RequestTenantInterceptor
       - org.farmsuite.fhir.config.FarmSuiteRules
+      - org.farmsuite.fhir.interceptors.TaskOwnerSyncInterceptor
     custom-bean-packages: org.farmsuite.fhir
 
 sso:
@@ -80,6 +81,17 @@ sso:
       - /fhir/swagger-ui/**
       - /fhir/api-docs/**
       - /fhir/metadata
+
+# Cuenta de servicio para llamar de vuelta a Administration-MIC desde
+# TaskOwnerSyncInterceptor — misma cuenta que ya usa sso-keycloak
+# (AdministrationClientsFactory) en la dirección opuesta. client-secret real
+# va en el values.yaml del chart, no aquí (ver esa nota más abajo).
+farmsuite:
+  administration:
+    base-url: https://farmsuite.org/administration/api
+    token-endpoint: https://farmsuite.org/auth/realms/farmsuite/protocol/openid-connect/token
+    client-id: service-account
+    client-secret: ""
 
 
 logging:

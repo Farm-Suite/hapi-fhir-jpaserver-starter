@@ -1,0 +1,11 @@
+{
+  "resourceType": "SearchParameter",
+  "url": "http://farmsuite.org/fhir/SearchParameter/task-requested-period",
+  "name": "TaskRequestedPeriod",
+  "status": "active",
+  "description": "Permite buscar Task por Task.requestedPeriod (para cuándo es la tarea) — no existe un search param estándar de FHIR para este campo en Task. Tipo date sobre un Period: soporta rangos (ge/le/sa/eb) para el calendario semana/día, y el modificador :missing para las tareas sin fecha programada todavía.",
+  "code": "requested-period",
+  "base": ["Task"],
+  "type": "date",
+  "expression": "Task.requestedPeriod"
+}

@@ -160,6 +160,7 @@ applicationYaml: |
       custom-interceptor-classes:
         - org.farmsuite.fhir.interceptors.RequestTenantInterceptor
         - org.farmsuite.fhir.config.FarmSuiteRules
+        - org.farmsuite.fhir.interceptors.TaskOwnerSyncInterceptor
       custom-bean-packages: org.farmsuite.fhir
 
   sso:
@@ -170,6 +171,18 @@ applicationYaml: |
         - /fhir/swagger-ui/**
         - /fhir/api-docs/**
         - /fhir/metadata
+
+  # Cuenta de servicio para TaskOwnerSyncInterceptor -> Administration-MIC.
+  # client-secret: mismo valor por defecto que trae AdministrationClientsFactory
+  # en SSO/sso-keycloak (CLIENT_SECRET_SERVICE_ACCOUNT) — verificar que coincide
+  # con el secret real del cliente "service-account" en Keycloak antes de confiar
+  # en que esto funciona; si el admin de Keycloak lo rotó, hay que actualizarlo aquí.
+  farmsuite:
+    administration:
+      base-url: https://farmsuite.org/administration/api
+      token-endpoint: https://farmsuite.org/auth/realms/farmsuite/protocol/openid-connect/token
+      client-id: service-account
+      client-secret: "wRJVjXNxkWKE4hlvtBtFcqjsfPw7xqph"
 
   cors:
     allowed-origins:

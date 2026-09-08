@@ -451,6 +451,15 @@
             <artifactId>sso-interceptor-spring-autoconfigure</artifactId>
             <version>1.0.1-SNAPSHOT</version>
         </dependency>
+        <!-- Cliente OAuth2 client_credentials "vanilla" (sin Spring) — usado por
+             TaskOwnerSyncNotify para llamar a Administration-MIC como cuenta de
+             servicio, misma cuenta que ya usa sso-keycloak (AdministrationClientsFactory)
+             en la dirección opuesta (SSO -> Administration-MIC). -->
+        <dependency>
+            <groupId>org.farmsuite</groupId>
+            <artifactId>sso-interceptor-client</artifactId>
+            <version>1.0.1-SNAPSHOT</version>
+        </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
