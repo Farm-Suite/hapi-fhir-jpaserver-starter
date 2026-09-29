@@ -2,9 +2,12 @@ sso:
   oidc:
     enabled: true
     issuer-uri: http://localhost:8080/auth/realms/farmsuite
+    # Las listas de perfiles Spring reemplazan, no mezclan, la de application.yaml
+    # — hay que repetir /fhir/metadata aquí o este perfil la deja fuera.
     public-paths:
       - /fhir/swagger-ui/**
       - /fhir/api-docs/**
+      - /fhir/metadata
 
 # Perfil de desarrollo local: cualquier origen puede llamar al servidor FHIR
 # desde el navegador (necesario para probar frontales nuevos en distintos
@@ -14,3 +17,13 @@ sso:
 cors:
   allowed-origins:
     - "*"
+
+# Administration-MIC también corre en local bajo este perfil (ver su propio
+# application.yml, ya apunta a localhost por defecto). client-secret: mismo
+# client "service-account" que ya usa sso-keycloak (AdministrationClientsFactory)
+# y el propio Administration-MIC (FHIR_CLIENT_SECRET), no es un secreto nuevo.
+farmsuite:
+  administration:
+    base-url: http://localhost:8082/administration/api
+    token-endpoint: http://localhost:8080/auth/realms/farmsuite/protocol/openid-connect/token
+    client-secret: wRJVjXNxkWKE4hlvtBtFcqjsfPw7xqph
