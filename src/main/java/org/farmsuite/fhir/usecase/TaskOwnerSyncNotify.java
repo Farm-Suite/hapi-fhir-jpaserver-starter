@@ -13,6 +13,7 @@ import org.springframework.web.client.RestClient;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -37,7 +38,7 @@ public class TaskOwnerSyncNotify {
     private final OAuth2ClientCredentialsClient tokenClient;
     private final AdministrationClientProperties properties;
 
-    public void sync(Task task, String tenantId) {
+    public void sync(Task task, String tenantId, String organizationId) {
         if (tenantId == null) return;
 
         Reference owner = task.getOwner();
@@ -45,17 +46,19 @@ public class TaskOwnerSyncNotify {
         String practitionerId = owner.getReference().substring(PRACTITIONER_PREFIX.length());
         String taskId = task.getIdElement().getIdPart();
 
+        Map<String, Object> body = new HashMap<>();
+        body.put("tenantId", tenantId);
+        body.put("practitionerId", practitionerId);
+        body.put("organizationId", organizationId);
+        body.put("status", task.getStatus().toCode());
+        body.put("date", toOffsetDateTime(task.getAuthoredOn()));
+
         try {
             restClient.put()
                     .uri(properties.getBaseUrl() + "/practitioner-tasks/{taskId}", taskId)
                     .header("Authorization", tokenClient.getToken().authorizationHeaderValue())
                     .contentType(MediaType.APPLICATION_JSON)
-                    .body(Map.of(
-                            "tenantId", tenantId,
-                            "practitionerId", practitionerId,
-                            "status", task.getStatus().toCode(),
-                            "date", toOffsetDateTime(task.getAuthoredOn())
-                    ))
+                    .body(body)
                     .retrieve()
                     .toBodilessEntity();
             log.debug("Task {} sincronizada con Administration-MIC (practitioner={}, tenant={})", taskId, practitionerId, tenantId);

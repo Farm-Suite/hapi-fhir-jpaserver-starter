@@ -4,10 +4,16 @@ import ca.uhn.fhir.interceptor.api.Hook;
 import ca.uhn.fhir.interceptor.api.Interceptor;
 import ca.uhn.fhir.interceptor.api.Pointcut;
 import ca.uhn.fhir.interceptor.model.RequestPartitionId;
+import ca.uhn.fhir.jpa.api.dao.DaoRegistry;
+import ca.uhn.fhir.jpa.api.dao.IFhirResourceDao;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
+import ca.uhn.fhir.rest.api.server.SystemRequestDetails;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.farmsuite.fhir.usecase.TaskOwnerSyncNotify;
 import org.hl7.fhir.instance.model.api.IBaseResource;
+import org.hl7.fhir.r5.model.IdType;
+import org.hl7.fhir.r5.model.Location;
 import org.hl7.fhir.r5.model.Task;
 import org.springframework.stereotype.Component;
 
@@ -26,12 +32,14 @@ import org.springframework.stereotype.Component;
  * de antes: resincronizar/reborrar de más es inofensivo, tanto el upsert
  * como el borrado son idempotentes del lado de Administration-MIC.
  */
+@Slf4j
 @Interceptor
 @Component
 @RequiredArgsConstructor
 public class TaskOwnerSyncInterceptor {
 
     private final TaskOwnerSyncNotify taskOwnerSyncNotify;
+    private final DaoRegistry daoRegistry;
 
     @Hook(Pointcut.STORAGE_PRECOMMIT_RESOURCE_CREATED)
     public void onCreated(
@@ -42,7 +50,8 @@ public class TaskOwnerSyncInterceptor {
         // Al crear, sin owner no hay nada que espejar todavía — a diferencia
         // de onUpdated, no hace falta un remove() de más (nunca tuvo espejo).
         if (!(theResource instanceof Task task) || !hasOwnerReference(task)) return;
-        taskOwnerSyncNotify.sync(task, theRequestPartitionId.getFirstPartitionNameOrNull());
+        String tenantId = resolveTenantId(theRequestDetails, theRequestPartitionId);
+        taskOwnerSyncNotify.sync(task, tenantId, resolveOrganizationId(task, tenantId));
     }
 
     @Hook(Pointcut.STORAGE_PRECOMMIT_RESOURCE_UPDATED)
@@ -56,10 +65,26 @@ public class TaskOwnerSyncInterceptor {
         // quitado), así que la rama sin owner llama remove(), no un no-op.
         if (!(theNewResource instanceof Task task)) return;
         if (hasOwnerReference(task)) {
-            taskOwnerSyncNotify.sync(task, theRequestPartitionId.getFirstPartitionNameOrNull());
+            String tenantId = resolveTenantId(theRequestDetails, theRequestPartitionId);
+            taskOwnerSyncNotify.sync(task, tenantId, resolveOrganizationId(task, tenantId));
         } else {
             taskOwnerSyncNotify.remove(task.getIdElement().getIdPart());
         }
+    }
+
+    /**
+     * {@code theRequestPartitionId} puede venir {@code null} en estos pointcuts (confirmado en
+     * runtime — HAPI no lo garantiza poblado en `STORAGE_PRECOMMIT_RESOURCE_*`, a diferencia de
+     * `STORAGE_PARTITION_IDENTIFY_*`). `RequestDetails.getTenantId()` es la misma fuente que ya usa
+     * `RequestTenantInterceptor` para resolver la partición desde la URL, así que es un fallback
+     * fiel, no una aproximación.
+     */
+    private String resolveTenantId(RequestDetails theRequestDetails, RequestPartitionId theRequestPartitionId) {
+        if (theRequestPartitionId != null) {
+            String fromPartition = theRequestPartitionId.getFirstPartitionNameOrNull();
+            if (fromPartition != null) return fromPartition;
+        }
+        return theRequestDetails == null ? null : theRequestDetails.getTenantId();
     }
 
     @Hook(Pointcut.STORAGE_PRECOMMIT_RESOURCE_DELETED)
@@ -74,5 +99,29 @@ public class TaskOwnerSyncInterceptor {
 
     private boolean hasOwnerReference(Task task) {
         return task.hasOwner() && task.getOwner().hasReference();
+    }
+
+    /**
+     * Task no tiene un elemento nativo de Organization — se resuelve vía
+     * Task.location -> Location.managingOrganization (toda Location cuelga de
+     * una Organization, fijado una sola vez al crearla). Best-effort: si la
+     * Task no tiene location, o la Location no se puede leer, no bloquea el
+     * espejo — solo queda sin organizationId (igual que las tareas de hoy).
+     */
+    private String resolveOrganizationId(Task task, String tenantId) {
+        if (!task.hasLocation() || !task.getLocation().hasReference() || tenantId == null) return null;
+        try {
+            IFhirResourceDao<Location> locationDao = daoRegistry.getResourceDao(Location.class);
+            SystemRequestDetails requestDetails = new SystemRequestDetails().setRequestPartitionId(RequestPartitionId.fromPartitionName(tenantId));
+            Location location = locationDao.read(new IdType(task.getLocation().getReference()), requestDetails);
+            if (location == null || !location.hasManagingOrganization() || !location.getManagingOrganization().hasReference()) {
+                return null;
+            }
+            return location.getManagingOrganization().getReferenceElement().getIdPart();
+        } catch (Exception e) {
+            log.warn("No se pudo resolver la Organization de la Location {} de la Task {}",
+                    task.getLocation().getReference(), task.getIdElement().getIdPart(), e);
+            return null;
+        }
     }
 }
