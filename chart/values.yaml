@@ -161,6 +161,7 @@ applicationYaml: |
         - org.farmsuite.fhir.interceptors.RequestTenantInterceptor
         - org.farmsuite.fhir.config.FarmSuiteRules
         - org.farmsuite.fhir.interceptors.TaskOwnerSyncInterceptor
+        - org.farmsuite.fhir.interceptors.PractitionerUsernameGuardInterceptor
       custom-bean-packages: org.farmsuite.fhir
 
   sso:

@@ -170,11 +170,22 @@ public class FarmSuiteRules extends AuthorizationInterceptor {
 				.andThen();
 		}
 
-		// La request real es instancia, `/ValueSet/{id}/$expand` (confirmado con un 403 real en
-		// esa forma) — `onType()` solo matchea la forma sin id, `/ValueSet/$expand`.
+		// Dos formas de la misma operación, según si el caller ya conoce el id local del
+		// ValueSet o solo su url canónica: instancia, `/ValueSet/{id}/$expand` (confirmado con
+		// un 403 real en esa forma); tipo, `/ValueSet/$expand?url=...` (la que usa
+		// `ValueSetService.expand` en suite-front para resolver bindings por canónico — incluye
+		// los ValueSets base de HL7, que no tienen un id local conocido de antemano — también
+		// confirmada con un 403 real antes de esta regla). `onInstancesOfType()`/`onType()` no
+		// se superponen, hacen falta las dos.
 		builder = builder.allow().operation()
 			.named("$expand")
 			.onInstancesOfType(ValueSet.class)
+			.andAllowAllResponses()
+			.andThen();
+
+		builder = builder.allow().operation()
+			.named("$expand")
+			.onType(ValueSet.class)
 			.andAllowAllResponses()
 			.andThen();
 
