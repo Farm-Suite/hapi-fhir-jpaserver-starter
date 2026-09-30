@@ -99,6 +99,19 @@ public class RequestTenantInterceptor {
 		if (DEFAULT_TENANT_RESOURCES.contains(resourceName)) {
 			log.debug("Resource {} forced to DEFAULT partition", resourceName);
 			return RequestPartitionId.defaultPartition();
+		} else if (tenantId == null || tenantId.isBlank() || "DEFAULT".equalsIgnoreCase(tenantId)) {
+			// "DEFAULT" literal en la URL (catálogo "Sistema" de CodeSystem/ValueSet, ver
+			// terminology app) -> DEFAULT real (RequestPartitionId.defaultPartition(), no una
+			// búsqueda de partición por nombre "DEFAULT" — esa partición no existe como fila,
+			// confirmado con un 400 real: sin segmento de tenant en la URL, la request de HAPI
+			// bajo request_tenant_partitioning_mode interpreta el primer segmento del path como
+			// tenant SIEMPRE que el resourceType sea particionable, así que un GET sin tenant a
+			// `/fhir/ValueSet/_search` malinterpreta "ValueSet" como tenant y "_search" como
+			// resourceType. El segmento literal "DEFAULT" sí rutea bien — HAPI no valida el
+			// nombre contra el listado de particiones en esta capa, solo cuenta segmentos).
+			// tenantId null/blank cubre además las llamadas sin ServletRequestDetails real.
+			log.debug("Resource {} without real tenant in request -> DEFAULT partition", resourceName);
+			return RequestPartitionId.defaultPartition();
 		} else {
 			log.debug("Resource {} resolved to tenant {}", resourceName, tenantId);
 			resolvedPartition = RequestPartitionId.fromPartitionName(tenantId);

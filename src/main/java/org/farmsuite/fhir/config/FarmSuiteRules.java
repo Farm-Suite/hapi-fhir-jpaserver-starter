@@ -84,6 +84,7 @@ public class FarmSuiteRules extends AuthorizationInterceptor {
 		builder = applyReferenceDataReadRules(builder);
 
 		String tenantId = session.getTenantId();
+		builder = applyTenantTerminologyReadRules(builder, tenantId);
 		List<String> rawPermissions = session.getPermission();
 
 		if (tenantId == null || tenantId.isBlank() || rawPermissions == null || rawPermissions.isEmpty()) {
@@ -176,6 +177,36 @@ public class FarmSuiteRules extends AuthorizationInterceptor {
 			.onInstancesOfType(ValueSet.class)
 			.andAllowAllResponses()
 			.andThen();
+
+		return builder;
+	}
+
+	/**
+	 * Terminología propia del tenant — {@code CodeSystem}, {@code ValueSet} — legible por
+	 * cualquier miembro autenticado del tenant, con independencia de su plantilla de rol,
+	 * mismo criterio que {@link #applyReferenceDataReadRules} para los datos de sistema en
+	 * DEFAULT. A diferencia de esa regla, acá {@code forTenantIds(tenantId)} sí tiene sentido:
+	 * {@link org.farmsuite.fhir.interceptors.RequestTenantInterceptor} resuelve la partición de
+	 * estos dos tipos exactamente al segmento de tenant de la URL (no hay forzado/mismatch como
+	 * con Practitioner o los datos de sistema), así que la regla compara contra lo mismo que ya
+	 * resolvió el interceptor.
+	 *
+	 * <p>Escritura (create/update/delete) no se resuelve acá — sigue el mecanismo genérico de
+	 * {@link #applyPermission} vía el claim {@code permissions} (ej. {@code CodeSystem.rscud}),
+	 * igual que cualquier otro resourceType.
+	 */
+	private IAuthRuleBuilder applyTenantTerminologyReadRules(IAuthRuleBuilder builder, String tenantId) {
+		if (tenantId == null || tenantId.isBlank()) {
+			return builder;
+		}
+
+		for (Class<? extends IBaseResource> resourceType : List.of(CodeSystem.class, ValueSet.class)) {
+			builder = builder.allow().read()
+				.resourcesOfType(resourceType)
+				.withAnyId()
+				.forTenantIds(tenantId)
+				.andThen();
+		}
 
 		return builder;
 	}

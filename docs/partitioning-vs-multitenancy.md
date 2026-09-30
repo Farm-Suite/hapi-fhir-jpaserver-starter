@@ -31,6 +31,11 @@ PARTITION_DATE  DATE     -- para particionado temporal
 Ciertos recursos de conformance **siempre van a la partición por defecto**, independientemente de la configuración:
 `CapabilityStatement`, `CodeSystem`, `StructureDefinition`, `ValueSet`, `SearchParameter`, `NamingSystem`, entre otros.
 
+**En FarmSuite, `CodeSystem`/`ConceptMap`/`StructureDefinition`/`ValueSet` son la excepción**:
+`RequestPartitionableResourcesHelper` (`org.farmsuite.fhir.interceptors`, activado vía
+`RequestPartitionHelperOverrideProcessor`) los fuerza a ser particionables — ver sección 8 y
+[`cross-cutting-patterns.md`](../../Infra/docs/features/cross-cutting-patterns.md#1-multitenancy-vía-partitioning-de-hapi).
+
 ---
 
 ## 2. Particionamiento vs Multitenancy — La diferencia clave
@@ -152,7 +157,9 @@ Configurable mediante `allow_references_across_partitions`:
 
 ## 8. Configuración actual en FarmSuite
 
-El servidor HAPI FHIR del proyecto (`application.yaml`) tiene habilitado tanto multitenancy como Database Partition Mode:
+El servidor HAPI FHIR del proyecto (`application.yaml`) tiene habilitado multitenancy por URL,
+pero **no** el Database Partition Mode nativo (Modo C de la sección 3) — la partición efectiva la
+resuelve el interceptor propio (`RequestTenantInterceptor`), no el motor de partición nativo:
 
 ```yaml
 hapi:
@@ -162,7 +169,7 @@ hapi:
       partitioning_include_in_search_hashes: false     # no incluir partition_id en hashes de búsqueda
       request_tenant_partitioning_mode: true           # ← Multitenancy por URL activo
       conditional-create-duplicate-identifiers-enabled: false
-      database-partition-mode-enabled: true            # ← DB Partition Mode (HAPI 8.0+)
+      database-partition-mode-enabled: false           # ← DB Partition Mode (HAPI 8.0+) apagado
 ```
 
 Con esta configuración, las peticiones deben incluir el tenant en la URL:
@@ -173,6 +180,10 @@ POST https://farmsuite.org/fhir/{tenant}/Observation
 ```
 
 El `{tenant}` en la URL se mapea directamente al nombre de la partición registrada en HAPI. Como `allow_references_across_partitions: true`, los recursos de un tenant pueden referenciar recursos de otros tenants (útil para terminología compartida o recursos administrativos comunes).
+
+Para `CodeSystem`/`ValueSet` (particionables en FarmSuite, ver sección 1), una request sin
+`{tenant}` en la URL resuelve a `DEFAULT` — es como `terminology` en `suite-front` lee/escribe el
+catálogo "Sistema" compartido, sin tocar la partición de ningún tenant.
 
 ---
 
