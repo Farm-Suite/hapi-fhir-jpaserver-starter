@@ -28,6 +28,23 @@ spring:
         default_schema: fhir
         hbm2ddl:
           auto: update
+        # Índice Lucene de Hibernate Search — sin esto, $expand/$validate-code/
+        # snapshot con binding required fallan con HSEARCH800001 (Hibernate
+        # Search was not initialized). Mismo backend que pre (Lucene local,
+        # NO Elasticsearch — ver chart/values.yaml de este repo), para que
+        # local y pre se comporten igual. Como acá no hay volumen persistente,
+        # el índice se reconstruye solo en el primer arranque (tarda un poco
+        # la primera vez que se usa un $expand).
+        search:
+          enabled: true
+          backend:
+            type: lucene
+            analysis:
+              configurer: ca.uhn.fhir.jpa.search.HapiHSearchAnalysisConfigurers$HapiLuceneAnalysisConfigurer
+            directory:
+              type: local-filesystem
+              root: /tmp/lucenefiles
+            lucene_version: lucene_current
 
 hapi:
   fhir:
