@@ -34,7 +34,7 @@ Ciertos recursos de conformance **siempre van a la partición por defecto**, ind
 **En FarmSuite, `CodeSystem`/`ConceptMap`/`StructureDefinition`/`ValueSet` son la excepción**:
 `RequestPartitionableResourcesHelper` (`org.farmsuite.fhir.interceptors`, activado vía
 `RequestPartitionHelperOverrideProcessor`) los fuerza a ser particionables — ver sección 8 y
-[`cross-cutting-patterns.md`](../../Infra/docs/features/cross-cutting-patterns.md#1-multitenancy-vía-partitioning-de-hapi).
+la skill `farmsuite:arquitectura-multitenancy` (`Infra/claude/farmsuite/skills/arquitectura-multitenancy/SKILL.md`).
 
 ---
 
