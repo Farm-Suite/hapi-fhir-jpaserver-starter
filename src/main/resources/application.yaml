@@ -45,6 +45,9 @@ spring:
               type: local-filesystem
               root: /tmp/lucenefiles
             lucene_version: lucene_current
+  profiles:
+    active:
+      - sso-local
 
 hapi:
   fhir:
