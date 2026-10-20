@@ -1,0 +1,6 @@
+# Perfil opcional: usar un Postgres local (Infra/local/docker-compose.yml) en vez de
+# la base compartida de pre (farmsuite.org). Mismo usuario/clave/schema que application.yaml
+# — solo cambia el host. No se activa solo: sumarlo a los perfiles activos (ver sso-local).
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/farmsuite?currentSchema=fhir

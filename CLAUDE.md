@@ -33,4 +33,5 @@ Keycloak local, activar el perfil `sso-local`. Entorno: `farmsuite:flujo-entorno
 - Los hooks `STORAGE_PRECOMMIT_*` pueden recibir `RequestPartitionId` nulo: usar
   `RequestDetails.getTenantId()` como respaldo.
 - Espejos hacia microservicios: best-effort, nunca bloquear la escritura FHIR.
-- La base de datos local es la de pre (compartida): cuidado con datos de prueba.
+- Por defecto el local corre contra un Postgres local propio (`Infra/local/docker-compose.yml`,
+  perfil `local-db` activo en `application.yaml`), no contra la de pre. Ver `farmsuite:flujo-entorno-local`.

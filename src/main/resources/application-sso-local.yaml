@@ -1,3 +1,9 @@
+# Postgres local (Infra/local/docker-compose.yml) en vez de la compartida de pre —
+# mismo usuario/clave/schema, solo cambia el host.
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/farmsuite?currentSchema=fhir
+
 sso:
   oidc:
     enabled: true

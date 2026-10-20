@@ -48,6 +48,7 @@ spring:
   profiles:
     active:
       - sso-local
+      - local-db
 
 hapi:
   fhir:
