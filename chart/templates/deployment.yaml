@@ -12,6 +12,12 @@ spec:
   # El índice Lucene vive en un PVC ReadWriteOnce: con RollingUpdate el pod
   # nuevo arranca antes de que el viejo suelte el volumen y, si cae en otro
   # nodo, el rollout se queda colgado (Multi-Attach). Recreate lo libera antes.
+  # Migrar un Deployment que ya existía con RollingUpdate: helm (server-side
+  # apply) no borra el `rollingUpdate` que Kubernetes rellenó por defecto y la
+  # API lo rechaza junto a Recreate. Antes del primer upgrade, una vez:
+  #   kubectl -n <ns> patch deploy <release>-hapi-fhir --type=json -p='[
+  #     {"op":"remove","path":"/spec/strategy/rollingUpdate"},
+  #     {"op":"replace","path":"/spec/strategy/type","value":"Recreate"}]'
   strategy:
     type: Recreate
   {{- end }}
