@@ -8,6 +8,13 @@ spec:
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
+  {{- if .Values.persistence.enabled }}
+  # El índice Lucene vive en un PVC ReadWriteOnce: con RollingUpdate el pod
+  # nuevo arranca antes de que el viejo suelte el volumen y, si cae en otro
+  # nodo, el rollout se queda colgado (Multi-Attach). Recreate lo libera antes.
+  strategy:
+    type: Recreate
+  {{- end }}
   selector:
     matchLabels:
       {{- include "chart.selectorLabels" . | nindent 6 }}

@@ -53,6 +53,10 @@ readinessProbe:
   timeoutSeconds: 10
   failureThreshold: 5
 
+# No activar con persistence.enabled: el índice Lucene es local a cada pod
+# (PVC ReadWriteOnce), así que dos réplicas tendrían índices distintos y
+# $expand/$validate-code darían resultados distintos según el pod. Escalar
+# HAPI requiere un backend de Hibernate Search compartido (Elasticsearch).
 autoscaling:
   enabled: false
   minReplicas: 1
