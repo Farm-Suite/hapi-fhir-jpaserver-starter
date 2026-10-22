@@ -38,6 +38,8 @@ public class AdministrationClientConfig {
         private String tokenEndpoint = "https://farmsuite.org/auth/realms/farmsuite/protocol/openid-connect/token";
         private String clientId = "service-account";
         private String clientSecret;
+        /** Tope total (token + llamada) de cada sincronización del espejo; ver {@code TaskOwnerSyncNotify}. */
+        private Duration timeout = Duration.ofSeconds(5);
     }
 
     @Bean

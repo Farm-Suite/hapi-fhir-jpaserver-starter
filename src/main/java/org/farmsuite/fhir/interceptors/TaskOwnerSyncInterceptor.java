@@ -10,10 +10,12 @@ import ca.uhn.fhir.rest.api.server.RequestDetails;
 import ca.uhn.fhir.rest.api.server.SystemRequestDetails;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.farmsuite.fhir.usecase.TaskAssignment;
 import org.farmsuite.fhir.usecase.TaskOwnerSyncNotify;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r5.model.IdType;
 import org.hl7.fhir.r5.model.Location;
+import org.hl7.fhir.r5.model.PractitionerRole;
 import org.hl7.fhir.r5.model.Task;
 import org.springframework.stereotype.Component;
 
@@ -51,7 +53,7 @@ public class TaskOwnerSyncInterceptor {
         // de onUpdated, no hace falta un remove() de más (nunca tuvo espejo).
         if (!(theResource instanceof Task task) || !hasOwnerReference(task)) return;
         String tenantId = resolveTenantId(theRequestDetails, theRequestPartitionId);
-        taskOwnerSyncNotify.sync(task, tenantId, resolveOrganizationId(task, tenantId));
+        syncTask(task, tenantId);
     }
 
     @Hook(Pointcut.STORAGE_PRECOMMIT_RESOURCE_UPDATED)
@@ -66,7 +68,7 @@ public class TaskOwnerSyncInterceptor {
         if (!(theNewResource instanceof Task task)) return;
         if (hasOwnerReference(task)) {
             String tenantId = resolveTenantId(theRequestDetails, theRequestPartitionId);
-            taskOwnerSyncNotify.sync(task, tenantId, resolveOrganizationId(task, tenantId));
+            syncTask(task, tenantId);
         } else {
             taskOwnerSyncNotify.remove(task.getIdElement().getIdPart());
         }
@@ -79,7 +81,7 @@ public class TaskOwnerSyncInterceptor {
      * `RequestTenantInterceptor` para resolver la partición desde la URL, así que es un fallback
      * fiel, no una aproximación.
      */
-    private String resolveTenantId(RequestDetails theRequestDetails, RequestPartitionId theRequestPartitionId) {
+    static String resolveTenantId(RequestDetails theRequestDetails, RequestPartitionId theRequestPartitionId) {
         if (theRequestPartitionId != null) {
             String fromPartition = theRequestPartitionId.getFirstPartitionNameOrNull();
             if (fromPartition != null) return fromPartition;
@@ -95,6 +97,17 @@ public class TaskOwnerSyncInterceptor {
     ) {
         if (!(theResource instanceof Task task)) return;
         taskOwnerSyncNotify.remove(task.getIdElement().getIdPart());
+    }
+
+    /** Resuelve la asignación (leyendo el PractitionerRole si hace falta) y la espeja. */
+    private void syncTask(Task task, String tenantId) {
+        TaskAssignment.from(task, roleId -> readPractitionerRole(roleId, tenantId))
+            .ifPresent(assignment -> taskOwnerSyncNotify.sync(task, tenantId, resolveOrganizationId(task, tenantId), assignment));
+    }
+
+    private PractitionerRole readPractitionerRole(String roleId, String tenantId) {
+        SystemRequestDetails requestDetails = new SystemRequestDetails().setRequestPartitionId(RequestPartitionId.fromPartitionName(tenantId));
+        return daoRegistry.getResourceDao(PractitionerRole.class).read(new IdType("PractitionerRole", roleId), requestDetails);
     }
 
     private boolean hasOwnerReference(Task task) {
