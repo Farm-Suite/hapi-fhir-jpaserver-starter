@@ -93,6 +93,10 @@ hapi:
       - org.farmsuite.fhir.config.FarmSuiteRules
       - org.farmsuite.fhir.interceptors.TaskOwnerSyncInterceptor
       - org.farmsuite.fhir.interceptors.PractitionerUsernameGuardInterceptor
+      - org.farmsuite.fhir.interceptors.ClinicalTaskValidationInterceptor
+      - org.farmsuite.fhir.interceptors.TaskProvenanceInterceptor
+      - org.farmsuite.fhir.interceptors.ClinicalAccessAuditInterceptor
+      - org.farmsuite.fhir.interceptors.FarmSuiteConsentInterceptor
     custom-bean-packages: org.farmsuite.fhir
 
 sso:
@@ -114,6 +118,14 @@ farmsuite:
     token-endpoint: https://farmsuite.org/auth/realms/farmsuite/protocol/openid-connect/token
     client-id: service-account
     client-secret: ""
+    # Tope total (token + llamada) de cada sincronización del espejo de Task.owner; al vencer se
+    # descarta (best-effort) en vez de retener la transacción de la Task.
+    timeout: 5s
+  traceability:
+    # false: si no se puede escribir un Provenance/AuditEvent se registra el error y la operación
+    # continúa. true: la operación se rechaza (sin traza no hay cambio ni acceso clínico), pero SOLO
+    # para datos de personas (RGPD); animales, árboles y tareas operativas siguen en best-effort.
+    fail-closed: true
 
 
 logging:

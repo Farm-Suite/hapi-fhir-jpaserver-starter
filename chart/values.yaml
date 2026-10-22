@@ -166,6 +166,10 @@ applicationYaml: |
         - org.farmsuite.fhir.config.FarmSuiteRules
         - org.farmsuite.fhir.interceptors.TaskOwnerSyncInterceptor
         - org.farmsuite.fhir.interceptors.PractitionerUsernameGuardInterceptor
+        - org.farmsuite.fhir.interceptors.ClinicalTaskValidationInterceptor
+        - org.farmsuite.fhir.interceptors.TaskProvenanceInterceptor
+        - org.farmsuite.fhir.interceptors.ClinicalAccessAuditInterceptor
+        - org.farmsuite.fhir.interceptors.FarmSuiteConsentInterceptor
       custom-bean-packages: org.farmsuite.fhir
 
   sso:
@@ -188,6 +192,12 @@ applicationYaml: |
       token-endpoint: https://farmsuite.org/auth/realms/farmsuite/protocol/openid-connect/token
       client-id: service-account
       client-secret: "wRJVjXNxkWKE4hlvtBtFcqjsfPw7xqph"
+      # Tope total (token + llamada) de cada sincronización del espejo de Task.owner.
+      timeout: 5s
+    traceability:
+      # Si no se puede escribir el Provenance/AuditEvent de datos de PERSONAS (RGPD) se rechaza la
+      # operación; animales, árboles y tareas operativas siguen en best-effort.
+      fail-closed: true
 
   cors:
     allowed-origins:
