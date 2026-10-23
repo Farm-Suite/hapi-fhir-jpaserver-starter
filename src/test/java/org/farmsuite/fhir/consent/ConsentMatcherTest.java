@@ -166,6 +166,39 @@ class ConsentMatcherTest {
 	}
 
 	@Test
+	void anActiveGrantToTheActor_letsThemIntoTheTenant_whateverTheTypesOrTheMode() {
+		Consent readOnlyOneType = permit();
+		readOnlyOneType.addProvision().addResourceType(new Coding().setCode("Observation"));
+		Consent toDoctor = permit();
+		toDoctor.getGrantee().clear();
+		toDoctor.addGrantee(new Reference("Practitioner/dr-1"));
+
+		assertThat(ConsentMatcher.isActiveGrant(permit(), actor(null, PHARMACY), NOW)).isTrue();
+		assertThat(ConsentMatcher.isActiveGrant(readOnlyOneType, actor("dr-1", PHARMACY), NOW)).isTrue();
+		assertThat(ConsentMatcher.isActiveGrant(toDoctor, actor("dr-1", null), NOW)).isTrue();
+	}
+
+	@Test
+	void anActiveGrant_neverLetsInSomeoneElse_norAnInactiveOrExpiredOrDeniedOne() {
+		Consent expired = permit();
+		expired.setPeriod(new Period().setEnd(date("2026-01-01T00:00:00Z")));
+		Consent closedProvision = permit();
+		closedProvision.addProvision().setPeriod(new Period().setEnd(date("2026-01-01T00:00:00Z")));
+		Consent revoked = permit();
+		revoked.setStatus(Consent.ConsentState.INACTIVE);
+		Consent denied = permit();
+		denied.setDecision(Enumerations.ConsentProvisionType.DENY);
+
+		assertThat(ConsentMatcher.isActiveGrant(permit(), actor("dr-1", "other-org"), NOW)).isFalse();
+		assertThat(ConsentMatcher.isActiveGrant(permit(), actor(null, null), NOW)).isFalse();
+		assertThat(ConsentMatcher.isActiveGrant(expired, actor(null, PHARMACY), NOW)).isFalse();
+		assertThat(ConsentMatcher.isActiveGrant(closedProvision, actor(null, PHARMACY), NOW)).isFalse();
+		assertThat(ConsentMatcher.isActiveGrant(revoked, actor(null, PHARMACY), NOW)).isFalse();
+		assertThat(ConsentMatcher.isActiveGrant(denied, actor(null, PHARMACY), NOW)).isFalse();
+		assertThat(ConsentMatcher.isActiveGrant(null, actor(null, PHARMACY), NOW)).isFalse();
+	}
+
+	@Test
 	void nullConsent_doesNotPermit() {
 		assertThat(ConsentMatcher.permits(null, PHARMACY, "Observation", NOW)).isFalse();
 	}

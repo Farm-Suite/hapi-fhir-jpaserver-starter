@@ -1,0 +1,11 @@
+{
+  "resourceType": "SearchParameter",
+  "url": "http://farmsuite.org/fhir/SearchParameter/consent-grantee-ref",
+  "name": "ConsentGranteeRef",
+  "status": "active",
+  "description": "Permite buscar Consent por la referencia textual de su destinatario (Practitioner/x u Organization/y) sin resolverla. La búsqueda por referencia estándar (grantee) resuelve primero el id del recurso destino dentro de las particiones de la petición: un Practitioner vive en DEFAULT y una organización externa en la partición de otro tenant, así que no los encuentra. Este parámetro compara solo el texto.",
+  "code": "grantee-ref",
+  "base": ["Consent"],
+  "type": "token",
+  "expression": "Consent.grantee.reference"
+}

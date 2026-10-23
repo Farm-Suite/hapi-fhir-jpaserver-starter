@@ -10,6 +10,7 @@ import ca.uhn.fhir.rest.server.interceptor.auth.IAuthRuleBuilderRuleOpClassifier
 import ca.uhn.fhir.rest.server.interceptor.auth.RuleBuilder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.farmsuite.fhir.consent.TenantAccessService;
 import org.farmsuite.sso.session.UserSessionModel;
 import org.farmsuite.sso.session.UserSessionRepository;
 import org.hl7.fhir.instance.model.api.IBaseResource;
@@ -49,6 +50,7 @@ public class FarmSuiteRules extends AuthorizationInterceptor {
 
 	private final UserSessionRepository userSessionRepository;
 	private final FhirContext fhirContext;
+	private final TenantAccessService tenantAccess;
 
 	@Override
 	public List<IAuthRule> buildRuleList(RequestDetails theRequestDetails) {
@@ -58,7 +60,7 @@ public class FarmSuiteRules extends AuthorizationInterceptor {
 		}
 
 		return userSessionRepository.getUserSession()
-			.map(this::buildRulesForSession)
+			.map(session -> buildRulesForSession(session, theRequestDetails))
 			.orElseGet(FarmSuiteRules::anonymousRules);
 	}
 
@@ -73,7 +75,7 @@ public class FarmSuiteRules extends AuthorizationInterceptor {
 		return new RuleBuilder().allow().metadata().andThen().denyAll("no-session").build();
 	}
 
-	private List<IAuthRule> buildRulesForSession(UserSessionModel session) {
+	private List<IAuthRule> buildRulesForSession(UserSessionModel session, RequestDetails requestDetails) {
 		IAuthRuleBuilder builder = new RuleBuilder();
 		// $metadata siempre permitido, incluso sin permisos resueltos — lo necesita cualquier
 		// cliente autenticado para introspeccionar el CapabilityStatement (ver
@@ -82,6 +84,13 @@ public class FarmSuiteRules extends AuthorizationInterceptor {
 		builder = builder.allow().metadata().andThen();
 		builder = applyPractitionerSelfServiceRules(builder, session);
 		builder = applyReferenceDataReadRules(builder);
+
+		// Un externo (médico autónomo, farmacia) en un tenant que no es el suyo: entra por un Consent y las
+		// reglas son las del tenant de la URL, no las de su sesión. Por ahora solo la terminología del
+		// tenant, que necesita para interpretar lo que vea; nunca escribirla.
+		if (tenantAccess.resolve(requestDetails) == TenantAccessService.Kind.BY_CONSENT) {
+			return applyTenantTerminologyReadRules(builder, requestDetails.getTenantId()).denyAll("external-by-consent").build();
+		}
 
 		String tenantId = session.getTenantId();
 		builder = applyTenantTerminologyReadRules(builder, tenantId);

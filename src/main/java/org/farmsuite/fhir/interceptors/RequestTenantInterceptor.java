@@ -11,10 +11,10 @@ import ca.uhn.fhir.rest.api.server.SystemRequestDetails;
 import ca.uhn.fhir.rest.server.exceptions.ForbiddenOperationException;
 import ca.uhn.fhir.rest.server.servlet.ServletRequestDetails;
 import jakarta.annotation.PostConstruct;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.farmsuite.sso.session.UserSessionRepository;
+import org.farmsuite.fhir.consent.TenantAccessService;
 import org.hl7.fhir.instance.model.api.IBaseResource;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
 import java.util.Set;
@@ -22,14 +22,15 @@ import java.util.Set;
 @Slf4j
 @Component
 @Interceptor
-@RequiredArgsConstructor
 public class RequestTenantInterceptor {
 
 	private static final Set<String> DEFAULT_TENANT_RESOURCES = Set.of(
 		"Practitioner"
 	);
 
-	private final UserSessionRepository userSessionRepository;
+	// Diferido: esta clase se registra en la capa JPA al arrancar y TenantAccessService necesita el
+	// DaoRegistry de esa misma capa.
+	private final TenantAccessService tenantAccess;
 
 	// custom-interceptor-classes (ver StarterJpaConfig#registerCustomInterceptors)
 	// solo registra este interceptor en el IInterceptorService del RestfulServer,
@@ -44,6 +45,11 @@ public class RequestTenantInterceptor {
 	// no encuentran ningún hook para STORAGE_PARTITION_IDENTIFY_ANY y HAPI lanza
 	// HAPI-1319 ("No interceptor provided a value").
 	private final IInterceptorService jpaInterceptorService;
+
+	public RequestTenantInterceptor(@Lazy TenantAccessService tenantAccess, IInterceptorService jpaInterceptorService) {
+		this.tenantAccess = tenantAccess;
+		this.jpaInterceptorService = jpaInterceptorService;
+	}
 
 	@PostConstruct
 	public void registerOnJpaInterceptorService() {
@@ -124,23 +130,18 @@ public class RequestTenantInterceptor {
 	}
 
 	/**
-	 * El tenant de la URL tiene que ser el de la sesión. Sin esta comprobación el aislamiento entre
-	 * tenants dependía solo de {@code forTenantIds} en cada regla de FarmSuiteRules, y las reglas de
-	 * lectura de datos de sistema (CodeSystem/ValueSet, {@code $expand}) no lo llevan: cualquier usuario
-	 * autenticado leía la terminología de otro tenant cambiando el segmento de la URL. Para actuar en
-	 * otro tenant hay que pedir un token para él (token exchange), que lo emite Keycloak tras revalidar
-	 * el acceso. Las llamadas internas de sistema y la cuenta de servicio quedan fuera, igual que en
-	 * FarmSuiteRules; una request sin sesión la sigue gestionando FarmSuiteRules.
+	 * Quien hace la petición tiene que poder entrar al tenant de la URL: es el de su sesión, o hay un
+	 * Consent activo en ese tenant a favor de su practitioner u organización (ver
+	 * {@link TenantAccessService}). Sin esta comprobación el aislamiento entre tenants dependía solo de
+	 * {@code forTenantIds} en cada regla de FarmSuiteRules, y las reglas de lectura de datos de sistema
+	 * (CodeSystem/ValueSet, {@code $expand}) no lo llevan: cualquier usuario autenticado leía la
+	 * terminología de otro tenant cambiando el segmento de la URL. La cuenta de servicio, las llamadas
+	 * internas y las requests sin sesión (las gestiona FarmSuiteRules) quedan fuera.
 	 */
 	private void assertSessionMayAccessTenant(RequestDetails theRequestDetails, String tenantId) {
-		if (theRequestDetails instanceof SystemRequestDetails || userSessionRepository.isAdmin()) {
-			return;
+		if (tenantAccess.resolve(theRequestDetails) == TenantAccessService.Kind.NONE) {
+			throw new ForbiddenOperationException(
+				"El tenant '" + tenantId + "' no es el de la sesión del usuario ni tiene un consentimiento activo en él");
 		}
-		userSessionRepository.getUserSession().ifPresent(session -> {
-			if (!session.canAccessTenant(tenantId)) {
-				throw new ForbiddenOperationException(
-					"El tenant '" + tenantId + "' no es el de la sesión del usuario");
-			}
-		});
 	}
 }

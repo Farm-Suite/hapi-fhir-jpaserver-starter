@@ -11,6 +11,8 @@ import ca.uhn.fhir.jpa.api.dao.IFhirResourceDao;
 import ca.uhn.fhir.jpa.api.model.DaoMethodOutcome;
 import ca.uhn.fhir.jpa.model.util.JpaConstants;
 import ca.uhn.fhir.rest.api.server.SystemRequestDetails;
+import ca.uhn.fhir.jpa.searchparam.registry.SearchParamRegistryImpl;
+import ca.uhn.fhir.rest.server.util.ISearchParamRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.hl7.fhir.instance.model.api.IBaseResource;
@@ -44,6 +46,7 @@ public class CustomSearchParameterInitializer implements ApplicationRunner {
     private final FhirContext fhirContext;
     private final DaoRegistry daoRegistry;
     private final IJobCoordinator jobCoordinator;
+    private final ISearchParamRegistry searchParamRegistry;
 
     @Override
     public void run(ApplicationArguments args) throws IOException {
@@ -52,6 +55,13 @@ public class CustomSearchParameterInitializer implements ApplicationRunner {
 
         for (Resource resource : resources) {
             upsert(resource);
+        }
+
+        // HAPI refresca su registro de parámetros de búsqueda de forma periódica; sin forzarlo, los
+        // parámetros recién instalados dan "Unknown search parameter" hasta el siguiente refresco, y
+        // esos requests (p. ej. la comprobación de acceso por Consent) fallarían cerrados.
+        if (searchParamRegistry instanceof SearchParamRegistryImpl registry) {
+            registry.forceRefresh();
         }
     }
 

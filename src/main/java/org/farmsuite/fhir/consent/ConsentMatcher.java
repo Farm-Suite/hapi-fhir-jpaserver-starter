@@ -67,6 +67,21 @@ public final class ConsentMatcher {
 				&& allows(provision.getAction(), access));
 	}
 
+	/**
+	 * ¿Concede este Consent, ahora, acceso al actor? Es lo que le deja entrar a un tenant que no es el
+	 * suyo, sin mirar tipos de recurso ni modo (eso lo decide {@link #permits} para cada recurso): activo,
+	 * {@code permit}, a su practitioner u organización, con el periodo del Consent vigente y, si tiene
+	 * provisiones, alguna vigente.
+	 */
+	public static boolean isActiveGrant(Consent consent, Actor actor, Instant now) {
+		if (consent == null || consent.getStatus() != Consent.ConsentState.ACTIVE) return false;
+		if (consent.getDecision() != Enumerations.ConsentProvisionType.PERMIT) return false;
+		if (!isGrantee(consent, actor)) return false;
+		if (!contains(consent.getPeriod(), now)) return false;
+		return consent.getProvision().isEmpty()
+			|| consent.getProvision().stream().anyMatch(provision -> contains(provision.getPeriod(), now));
+	}
+
 	private static boolean isGrantee(Consent consent, Actor actor) {
 		for (Reference grantee : consent.getGrantee()) {
 			if (!grantee.hasReference()) continue;

@@ -3,12 +3,17 @@ package org.farmsuite.fhir;
 import ca.uhn.fhir.rest.server.exceptions.ForbiddenOperationException;
 import org.hl7.fhir.r5.model.Bundle;
 import org.hl7.fhir.r5.model.CodeSystem;
+import org.hl7.fhir.r5.model.Consent;
 import org.hl7.fhir.r5.model.Enumerations;
 import org.hl7.fhir.r5.model.Organization;
+import org.hl7.fhir.r5.model.Period;
 import org.hl7.fhir.r5.model.Practitioner;
+import org.hl7.fhir.r5.model.Reference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
+import java.util.Date;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -63,7 +68,75 @@ class CrossTenantIsolationIT extends AbstractFarmSuiteServerIT {
 		system.setContent(Enumerations.CodeSystemContentMode.COMPLETE);
 		system.addConcept().setCode("z").setDisplay("Z");
 		clientFor("DEFAULT").update().resource(system).execute();
+
+		// Externos con (o sin) un Consent en farm-b. Practitioner vive en DEFAULT.
+		for (String id : List.of("pr-ext-1", "pr-ext-revoked", "pr-ext-expired")) {
+			Practitioner practitioner = new Practitioner();
+			practitioner.setId(id);
+			practitioner.addName().setFamily(id);
+			tenantClient.update().resource(practitioner).execute();
+		}
+		accessConsent("Practitioner/pr-ext-1", Consent.ConsentState.ACTIVE, null);
+		accessConsent("Practitioner/pr-ext-revoked", Consent.ConsentState.INACTIVE, null);
+		accessConsent("Practitioner/pr-ext-expired", Consent.ConsentState.ACTIVE, new Period().setEnd(Date.from(Instant.parse("2026-01-01T00:00:00Z"))));
+		accessConsent("Organization/pharmacy-ext", Consent.ConsentState.ACTIVE, null);
 		otherTenantCreated = true;
+	}
+
+	/** Un Consent en farm-b que concede acceso a {@code grantee}, sin sujeto: es lo que deja entrar al tenant. */
+	private void accessConsent(String grantee, Consent.ConsentState status, Period period) {
+		Consent consent = new Consent();
+		consent.setStatus(status);
+		consent.setDecision(Enumerations.ConsentProvisionType.PERMIT);
+		consent.addGrantee(new Reference(grantee));
+		if (period != null) consent.setPeriod(period);
+		clientFor(OTHER_TENANT).create().resource(consent).execute();
+	}
+
+	@Test
+	void anExternalWithAConsentInTheTenant_readsItsTerminology() {
+		asHuman("pr-ext-1", "org-1", EVERYTHING);
+
+		assertThat(clientFor(OTHER_TENANT).read().resource(CodeSystem.class).withId("cs-b").execute()).isNotNull();
+	}
+
+	@Test
+	void anExternalWithAConsentInTheTenant_neverWritesItsTerminology() {
+		asHuman("pr-ext-1", "org-1", EVERYTHING);
+		CodeSystem codeSystem = new CodeSystem();
+		codeSystem.setId("cs-by-external");
+		codeSystem.setUrl("http://farmsuite.test/cs-by-external");
+		codeSystem.setStatus(Enumerations.PublicationStatus.ACTIVE);
+		codeSystem.setContent(Enumerations.CodeSystemContentMode.COMPLETE);
+
+		assertThatThrownBy(() -> clientFor(OTHER_TENANT).update().resource(codeSystem).execute())
+			.isInstanceOf(ForbiddenOperationException.class);
+	}
+
+	@Test
+	void theConsentOnlyGivesWhatItsForForNow_notTheRestOfTheTenant() {
+		asHuman("pr-ext-1", "org-1", EVERYTHING);
+
+		assertThatThrownBy(() -> clientFor(OTHER_TENANT).read().resource(Organization.class).withId("org-b").execute())
+			.isInstanceOf(ForbiddenOperationException.class);
+	}
+
+	@Test
+	void aRevokedOrExpiredConsent_doesNotLetIn() {
+		asHuman("pr-ext-revoked", "org-1", EVERYTHING);
+		assertThatThrownBy(() -> clientFor(OTHER_TENANT).read().resource(CodeSystem.class).withId("cs-b").execute())
+			.isInstanceOf(ForbiddenOperationException.class);
+
+		asHuman("pr-ext-expired", "org-1", EVERYTHING);
+		assertThatThrownBy(() -> clientFor(OTHER_TENANT).read().resource(CodeSystem.class).withId("cs-b").execute())
+			.isInstanceOf(ForbiddenOperationException.class);
+	}
+
+	@Test
+	void aConsentGrantedToTheOrganization_letsInThoseWhoActForIt() {
+		asHuman("pr-9", "pharmacy-ext", EVERYTHING);
+
+		assertThat(clientFor(OTHER_TENANT).read().resource(CodeSystem.class).withId("cs-b").execute()).isNotNull();
 	}
 
 	/** Guarda contra el exceso de celo: lo propio y el catálogo de Sistema siguen siendo legibles. */
