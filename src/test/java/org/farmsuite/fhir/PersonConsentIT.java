@@ -11,6 +11,7 @@ import org.hl7.fhir.r5.model.Group;
 import org.hl7.fhir.r5.model.IdType;
 import org.hl7.fhir.r5.model.Observation;
 import org.hl7.fhir.r5.model.Patient;
+import org.hl7.fhir.r5.model.Provenance;
 import org.hl7.fhir.r5.model.Reference;
 import org.junit.jupiter.api.Test;
 
@@ -157,6 +158,31 @@ class PersonConsentIT extends AbstractFarmSuiteServerIT {
 				assertThat(ev.getAgent()).extracting(a -> a.getWho().getReference()).contains("Organization/" + EXTERNAL);
 			});
 		});
+	}
+
+	@Test
+	void registeringAndRevokingAConsent_leavesAProvenanceNamingWhoDidIt() {
+		Fixture f = personWithObservation();
+		// Quien gestiona consentimientos: de la organización gestora, con permiso solo sobre Consent.
+		asHuman("pr-7", "org-1", List.of("Consent.rscu", "Provenance.rs"));
+		Consent consent = new Consent();
+		consent.setStatus(Consent.ConsentState.ACTIVE);
+		consent.setDecision(Enumerations.ConsentProvisionType.PERMIT);
+		consent.setSubject(new Reference("Patient/" + f.patientId));
+		consent.addGrantee(new Reference("Organization/" + EXTERNAL));
+		String id = tenantClient.create().resource(consent).execute().getId().getIdPart();
+
+		Consent stored = tenantClient.read().resource(Consent.class).withId(id).execute();
+		stored.setStatus(Consent.ConsentState.INACTIVE);
+		tenantClient.update().resource(stored).execute();
+
+		Bundle bundle = tenantClient.search().forResource(Provenance.class)
+			.where(Provenance.TARGET.hasId("Consent/" + id)).returnBundle(Bundle.class).execute();
+		List<Provenance> provenances = bundle.getEntry().stream().map(e -> (Provenance) e.getResource()).toList();
+
+		assertThat(provenances).extracting(p -> p.getActivity().getCodingFirstRep().getCode()).containsExactlyInAnyOrder("grant", "revoke");
+		assertThat(provenances).allSatisfy(p -> assertThat(p.getAgentFirstRep().getWho().getReference()).isEqualTo("Practitioner/pr-7"));
+		assertThat(provenances).anySatisfy(p -> assertThat(p.getEntityFirstRep().getWhat().getReference()).contains("Consent/" + id));
 	}
 
 	@Test

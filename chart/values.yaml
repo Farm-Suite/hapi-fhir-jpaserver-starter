@@ -169,6 +169,7 @@ applicationYaml: |
         - org.farmsuite.fhir.interceptors.ClinicalTaskValidationInterceptor
         - org.farmsuite.fhir.interceptors.TaskProvenanceInterceptor
         - org.farmsuite.fhir.interceptors.ClinicalAccessAuditInterceptor
+        - org.farmsuite.fhir.interceptors.ConsentProvenanceInterceptor
         - org.farmsuite.fhir.interceptors.FarmSuiteConsentInterceptor
       custom-bean-packages: org.farmsuite.fhir
 
