@@ -10,6 +10,7 @@ import ca.uhn.fhir.rest.server.interceptor.auth.IAuthRuleBuilderRuleOpClassifier
 import ca.uhn.fhir.rest.server.interceptor.auth.RuleBuilder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.farmsuite.fhir.consent.PatientSubjectResolver;
 import org.farmsuite.fhir.consent.TenantAccessService;
 import org.farmsuite.sso.session.UserSessionModel;
 import org.farmsuite.sso.session.UserSessionRepository;
@@ -86,10 +87,9 @@ public class FarmSuiteRules extends AuthorizationInterceptor {
 		builder = applyReferenceDataReadRules(builder);
 
 		// Un externo (médico autónomo, farmacia) en un tenant que no es el suyo: entra por un Consent y las
-		// reglas son las del tenant de la URL, no las de su sesión. Por ahora solo la terminología del
-		// tenant, que necesita para interpretar lo que vea; nunca escribirla.
+		// reglas son las del tenant de la URL, no las de su sesión.
 		if (tenantAccess.resolve(requestDetails) == TenantAccessService.Kind.BY_CONSENT) {
-			return applyTenantTerminologyReadRules(builder, requestDetails.getTenantId()).denyAll("external-by-consent").build();
+			return applyExternalByConsentRules(builder, requestDetails.getTenantId()).denyAll("external-by-consent").build();
 		}
 
 		String tenantId = session.getTenantId();
@@ -228,6 +228,24 @@ public class FarmSuiteRules extends AuthorizationInterceptor {
 				.andThen();
 		}
 
+		return builder;
+	}
+
+	/**
+	 * Lo que se abre a quien entra por un Consent: leer la terminología del tenant (nunca escribirla) y leer y
+	 * escribir los tipos que cuelgan de un paciente. Son reglas gruesas a propósito: <b>qué paciente, qué tipo
+	 * y qué modo</b> lo decide el Consent en {@code FarmSuiteConsentService}, y las tareas el responsable. Nunca
+	 * se abre borrar ni escribir el propio {@code Patient}; crear tareas lo corta {@code mayCreate}.
+	 */
+	private IAuthRuleBuilder applyExternalByConsentRules(IAuthRuleBuilder builder, String tenantId) {
+		builder = applyTenantTerminologyReadRules(builder, tenantId);
+		for (String type : PatientSubjectResolver.PATIENT_LINKED_TYPES) {
+			Class<? extends IBaseResource> resourceClass = fhirContext.getResourceDefinition(type).getImplementingClass();
+			builder = builder.allow().read().resourcesOfType(resourceClass).withAnyId().forTenantIds(tenantId).andThen();
+			if (!"Patient".equals(type)) {
+				builder = builder.allow().write().resourcesOfType(resourceClass).withAnyId().forTenantIds(tenantId).andThen();
+			}
+		}
 		return builder;
 	}
 

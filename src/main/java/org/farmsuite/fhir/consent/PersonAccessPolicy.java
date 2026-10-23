@@ -86,6 +86,27 @@ public final class PersonAccessPolicy {
 			: Decision.DENY;
 	}
 
+	/**
+	 * Un externo al tenant (entra por Consent: un médico autónomo, una farmacia) no tiene relación
+	 * asistencial con nadie de él, así que no valen los atajos de {@link #decide}: los ids de organización
+	 * no significan lo mismo entre tenants, una sesión sin organización no es "el dueño del tenant" y un
+	 * animal o un árbol tampoco se abre solo porque no sea una persona. Todo paciente, de la clase que
+	 * sea, se decide únicamente por un Consent que cubra al actor, el tipo y el modo pedidos.
+	 */
+	public static Decision decideForExternal(
+		PatientFacts patient,
+		Actor actor,
+		String resourceType,
+		Access access,
+		ConsentLookup consents,
+		Instant now
+	) {
+		if (patient.unresolved()) return Decision.DENY;
+		return consents.permits(patient.patientId(), actor, resourceType, access, now)
+			? Decision.ALLOW_CONSENT
+			: Decision.DENY;
+	}
+
 	private static boolean isBlank(String value) {
 		return value == null || value.isBlank();
 	}

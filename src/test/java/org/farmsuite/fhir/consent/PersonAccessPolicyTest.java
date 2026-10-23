@@ -83,6 +83,37 @@ class PersonAccessPolicyTest {
 	}
 
 	@Test
+	void anExternal_isDecidedOnlyByTheConsent_whateverTheKindOfPatientOrTheOrganization() {
+		for (SubjectKind kind : SubjectKind.values()) {
+			PatientFacts patient = new PatientFacts("p1", kind, "org-1");
+			// sin Consent no se abre nada: ni un animal o un árbol, ni con la "misma" organización gestora
+			assertThat(PersonAccessPolicy.decideForExternal(patient, new Actor("dr-1", "org-1"), "Observation", Access.READ, NO_CONSENT, NOW))
+				.isEqualTo(Decision.DENY);
+			assertThat(PersonAccessPolicy.decideForExternal(patient, new Actor("dr-1", null), "Observation", Access.READ, ALWAYS_CONSENT, NOW))
+				.isEqualTo(Decision.ALLOW_CONSENT);
+		}
+	}
+
+	@Test
+	void anExternal_withAPatientThatCannotBeRead_isDenied_evenWithAConsent() {
+		assertThat(PersonAccessPolicy.decideForExternal(PatientFacts.unresolved("p1"), new Actor("dr-1", null), "Observation", Access.READ, ALWAYS_CONSENT, NOW))
+			.isEqualTo(Decision.DENY);
+	}
+
+	@Test
+	void anExternal_passesTheActorTheTypeAndTheAccessToTheConsentLookup() {
+		ConsentLookup onlyWritingObservations = (patient, actor, type, access, now) ->
+			"dr-1".equals(actor.practitionerId()) && type.equals("Observation") && access == Access.WRITE;
+
+		assertThat(PersonAccessPolicy.decideForExternal(person("org-1"), new Actor("dr-1", null), "Observation", Access.WRITE, onlyWritingObservations, NOW))
+			.isEqualTo(Decision.ALLOW_CONSENT);
+		assertThat(PersonAccessPolicy.decideForExternal(person("org-1"), new Actor("dr-1", null), "Observation", Access.READ, onlyWritingObservations, NOW))
+			.isEqualTo(Decision.DENY);
+		assertThat(PersonAccessPolicy.decideForExternal(person("org-1"), new Actor("dr-1", null), "Condition", Access.WRITE, onlyWritingObservations, NOW))
+			.isEqualTo(Decision.DENY);
+	}
+
+	@Test
 	void sessionWithoutOrganization_orPersonWithoutManagingOrganization_cannotBeClassified_andIsAllowed() {
 		assertThat(PersonAccessPolicy.decide(person("org-1"), new Actor(null, null), "Observation", Access.READ, ONLY_SELF, NO_CONSENT, NOW))
 			.isEqualTo(Decision.ALLOW_WITHOUT_ORGANIZATION_CONTEXT);

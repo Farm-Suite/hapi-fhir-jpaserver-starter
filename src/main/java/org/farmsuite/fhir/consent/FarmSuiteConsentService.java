@@ -16,6 +16,9 @@ import org.farmsuite.sso.session.UserSessionModel;
 import org.farmsuite.sso.session.UserSessionRepository;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r5.model.AuditEvent;
+import org.hl7.fhir.r5.model.IdType;
+import org.hl7.fhir.r5.model.PractitionerRole;
+import org.hl7.fhir.r5.model.Task;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -43,6 +46,7 @@ public class FarmSuiteConsentService implements IConsentService {
 	private final ConsentFinder consentFinder;
 	private final DaoRegistry daoRegistry;
 	private final TenantRequests tenantRequests;
+	private final TenantAccessService tenantAccess;
 	private final boolean requireOrganization;
 
 	private static final String DENIED_KEY = "farmsuite.consent.denied";
@@ -53,6 +57,7 @@ public class FarmSuiteConsentService implements IConsentService {
 		ConsentFinder consentFinder,
 		DaoRegistry daoRegistry,
 		TenantRequests tenantRequests,
+		TenantAccessService tenantAccess,
 		// true: una sesión sin organización no accede a datos de personas (por defecto se permite,
 		// porque el dueño del tenant puede no tener organización).
 		@Value("${farmsuite.consent.require-organization:false}") boolean requireOrganization
@@ -62,6 +67,7 @@ public class FarmSuiteConsentService implements IConsentService {
 		this.consentFinder = consentFinder;
 		this.daoRegistry = daoRegistry;
 		this.tenantRequests = tenantRequests;
+		this.tenantAccess = tenantAccess;
 		this.requireOrganization = requireOrganization;
 	}
 
@@ -97,8 +103,28 @@ public class FarmSuiteConsentService implements IConsentService {
 		return !denied;
 	}
 
+	/**
+	 * Crear un recurso. Como {@link #mayWrite}, salvo que un externo (entra por Consent) no crea tareas: las
+	 * ve y las actualiza si son suyas, pero las crea quien pertenece al tenant. HAPI no distingue crear de
+	 * actualizar en una regla de escritura, así que se corta aquí.
+	 */
+	public boolean mayCreate(RequestDetails requestDetails, IBaseResource resource) {
+		boolean externalCreatingATask = requestDetails != null && !(requestDetails instanceof SystemRequestDetails)
+			&& !userSessionRepository.isAdmin() && resource instanceof Task
+			&& tenantAccess.resolve(requestDetails) == TenantAccessService.Kind.BY_CONSENT;
+		if (externalCreatingATask) {
+			deniedIn(requestDetails).add(resource.fhirType() + "/" + resource.getIdElement().getIdPart());
+			auditDenied(requestDetails);
+			return false;
+		}
+		return mayWrite(requestDetails, resource, Access.WRITE);
+	}
+
 	/** La decisión para un recurso; cualquier cosa que no sea DENY deja pasar (incluido lo que no cuelga de una persona). */
 	private Decision evaluate(RequestDetails requestDetails, IBaseResource resource, Access access) {
+		if (tenantAccess.resolve(requestDetails) == TenantAccessService.Kind.BY_CONSENT) {
+			return evaluateExternal(requestDetails, resource, access);
+		}
 		if (!PatientSubjectResolver.PATIENT_LINKED_TYPES.contains(resource.fhirType())) return Decision.ALLOW_NOT_A_PERSON;
 
 		String tenantId = requestDetails.getTenantId();
@@ -129,6 +155,63 @@ public class FarmSuiteConsentService implements IConsentService {
 				resource.fhirType(), resource.getIdElement().getIdPart());
 		}
 		return decision;
+	}
+
+	/**
+	 * Quien entra a este tenant por un Consent (no es de él): solo ve lo de pacientes que un Consent cubre
+	 * —con el tipo y el modo pedidos— y las tareas que tiene asignadas. Un recurso de paciente sin paciente
+	 * identificable se deniega: no hay relación asistencial ni "dueño del tenant" a quien dejar pasar por el
+	 * hueco de la sesión sin organización. Lo que no cuelga de un paciente (la terminología del tenant, los
+	 * datos de sistema) no se decide aquí: ya lo dejaron pasar o no las reglas de {@code FarmSuiteRules}, que
+	 * para quien entra por Consent no abren nada más.
+	 */
+	private Decision evaluateExternal(RequestDetails requestDetails, IBaseResource resource, Access access) {
+		String type = resource.fhirType();
+		if (!PatientSubjectResolver.PATIENT_LINKED_TYPES.contains(type)) return Decision.ALLOW_NOT_A_PERSON;
+
+		String tenantId = requestDetails.getTenantId();
+		var session = userSessionRepository.getUserSession();
+		Actor actor = new Actor(
+			session.map(UserSessionModel::getPractitionerId).orElse(null),
+			session.map(UserSessionModel::getOrganizationId).orElse(null));
+
+		if (resource instanceof Task task) {
+			boolean mine = access != Access.DELETE
+				&& TaskOwnership.ownedBy(task, actor, role -> practitionerOfRole(tenantId, role, requestDetails));
+			return mine ? Decision.ALLOW_CONSENT : Decision.DENY;
+		}
+
+		Optional<PatientFacts> patient = patientSubjectResolver.factsOf(resource, tenantId, requestDetails);
+		if (patient.isEmpty()) return Decision.DENY;
+		Decision decision = PersonAccessPolicy.decideForExternal(
+			patient.get(), actor, type, access,
+			(patientId, who, resourceType, mode, now) -> permitsCached(tenantId, patientId, who, resourceType, mode, now, requestDetails),
+			Instant.now());
+		if (decision == Decision.DENY) {
+			log.warn("Acceso DENEGADO (externo por Consent): practitioner={} organization={} -> {}/{} (paciente {}, tenant {}, {})",
+				actor.practitionerId(), actor.organizationId(), type, resource.getIdElement().getIdPart(),
+				patient.get().patientId(), tenantId, access);
+		}
+		return decision;
+	}
+
+	/** El profesional de un PractitionerRole del tenant, o {@code null} si no existe o no se puede leer. */
+	private String practitionerOfRole(String tenantId, String roleId, RequestDetails requestDetails) {
+		String key = "farmsuite.role-practitioner." + tenantId + "/" + roleId;
+		Object cached = requestDetails.getUserData().get(key);
+		if (cached != null) return cached instanceof String id ? id : null;
+		String practitionerId = null;
+		try {
+			PractitionerRole role = daoRegistry.getResourceDao(PractitionerRole.class)
+				.read(new IdType("PractitionerRole", roleId), tenantRequests.systemIn(tenantId));
+			if (role.hasPractitioner() && role.getPractitioner().hasReference()) {
+				practitionerId = role.getPractitioner().getReferenceElement().getIdPart();
+			}
+		} catch (RuntimeException e) {
+			log.warn("No se pudo leer PractitionerRole/{} del tenant {} para saber de quién es una tarea", roleId, tenantId, e);
+		}
+		requestDetails.getUserData().put(key, practitionerId == null ? new Object() : practitionerId);
+		return practitionerId;
 	}
 
 	private boolean permitsCached(String tenantId, String patientId, Actor actor, String type, Access access, Instant now, RequestDetails requestDetails) {

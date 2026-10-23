@@ -26,7 +26,9 @@ public class PersonWriteConsentInterceptor {
 
 	@Hook(Pointcut.STORAGE_PRESTORAGE_RESOURCE_CREATED)
 	public void onCreated(IBaseResource theResource, RequestDetails theRequestDetails) {
-		check(theResource, theRequestDetails, Access.WRITE);
+		if (theResource == null || consentService.mayCreate(theRequestDetails, theResource)) return;
+		throw new ForbiddenOperationException(
+			"Sin consentimiento de la persona para crear " + theResource.fhirType() + "/" + theResource.getIdElement().getIdPart());
 	}
 
 	@Hook(Pointcut.STORAGE_PRESTORAGE_RESOURCE_UPDATED)
