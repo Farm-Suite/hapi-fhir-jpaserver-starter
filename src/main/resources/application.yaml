@@ -99,6 +99,7 @@ hapi:
       - org.farmsuite.fhir.interceptors.ConsentProvenanceInterceptor
       - org.farmsuite.fhir.interceptors.FarmSuiteConsentInterceptor
       - org.farmsuite.fhir.interceptors.PersonWriteConsentInterceptor
+      - org.farmsuite.fhir.interceptors.ServerAssignedIdInterceptor
     custom-bean-packages: org.farmsuite.fhir
 
 sso:
