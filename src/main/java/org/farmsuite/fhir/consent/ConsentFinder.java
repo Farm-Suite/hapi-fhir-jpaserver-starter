@@ -18,8 +18,8 @@ import java.time.Instant;
 import java.util.List;
 
 /**
- * Busca, en la partición del tenant, si hay un {@link Consent} que permita a una organización ver
- * los datos de un paciente. Un Consent puede concederse al paciente o a un {@link Group} de personas
+ * Busca, en la partición del tenant, si hay un {@link Consent} que permita a un actor (practitioner u
+ * organización) ver o escribir los datos de un paciente. Un Consent puede concederse al paciente o a un {@link Group} de personas
  * al que pertenezca (así un consentimiento cubre a todo el grupo hacia una organización, en vez de
  * uno por paciente). Falla cerrado: si la búsqueda falla, no hay consentimiento.
  */
@@ -31,7 +31,9 @@ public class ConsentFinder {
 	private final DaoRegistry daoRegistry;
 	private final TenantRequests tenantRequests;
 
-	public boolean permits(String tenantId, String patientId, String actorOrganizationId, String resourceType, Instant now) {
+	public boolean permits(String tenantId, String patientId, ConsentMatcher.Actor actor, String resourceType,
+			ConsentMatcher.Access access, Instant now) {
+		if (!hasActor(actor)) return false;
 		try {
 			ReferenceOrListParam subjects = new ReferenceOrListParam().addOr(new ReferenceParam("Patient/" + patientId));
 			for (String groupId : groupsOf(tenantId, patientId)) {
@@ -40,19 +42,27 @@ public class ConsentFinder {
 
 			SearchParameterMap map = new SearchParameterMap();
 			map.add("subject", subjects);
-			map.add("grantee", new ReferenceParam("Organization/" + actorOrganizationId));
+			// Sin filtro por grantee a propósito: el destinatario puede ser un Practitioner (partición DEFAULT) y
+			// la búsqueda por referencia entre particiones no lo encuentra. Basta con acotar por sujeto, que da
+			// pocos Consents, y ConsentMatcher comprueba el destinatario en memoria.
 			map.add("status", new TokenParam("active"));
 
 			RequestDetails details = tenantRequests.systemIn(tenantId);
 			IBundleProvider results = daoRegistry.getResourceDao(Consent.class).search(map, details);
 			List<IBaseResource> consents = results.getAllResources();
 			return consents.stream().anyMatch(c -> c instanceof Consent consent
-				&& ConsentMatcher.permits(consent, actorOrganizationId, resourceType, now));
+				&& ConsentMatcher.permits(consent, actor, resourceType, access, now));
 		} catch (RuntimeException e) {
-			log.error("No se pudo comprobar el Consent de Patient/{} para Organization/{} (tenant={}): se deniega",
-				patientId, actorOrganizationId, tenantId, e);
+			log.error("No se pudo comprobar el Consent de Patient/{} para {} (tenant={}): se deniega",
+				patientId, actor, tenantId, e);
 			return false;
 		}
+	}
+
+	/** Sin practitioner ni organización no hay a quién conceder nada. */
+	private static boolean hasActor(ConsentMatcher.Actor actor) {
+		return (actor.organizationId() != null && !actor.organizationId().isBlank())
+			|| (actor.practitionerId() != null && !actor.practitionerId().isBlank());
 	}
 
 	private List<String> groupsOf(String tenantId, String patientId) {

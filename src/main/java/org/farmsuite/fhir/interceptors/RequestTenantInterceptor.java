@@ -113,6 +113,7 @@ public class RequestTenantInterceptor {
 			log.debug("Resource {} without real tenant in request -> DEFAULT partition", resourceName);
 			return RequestPartitionId.defaultPartition();
 		} else {
+			assertSessionMayAccessTenant(theRequestDetails, tenantId);
 			log.debug("Resource {} resolved to tenant {}", resourceName, tenantId);
 			resolvedPartition = RequestPartitionId.fromPartitionName(tenantId);
 		}
@@ -120,5 +121,26 @@ public class RequestTenantInterceptor {
 		log.debug("Resolved partition {}", resolvedPartition);
 
 		return resolvedPartition;
+	}
+
+	/**
+	 * El tenant de la URL tiene que ser el de la sesión. Sin esta comprobación el aislamiento entre
+	 * tenants dependía solo de {@code forTenantIds} en cada regla de FarmSuiteRules, y las reglas de
+	 * lectura de datos de sistema (CodeSystem/ValueSet, {@code $expand}) no lo llevan: cualquier usuario
+	 * autenticado leía la terminología de otro tenant cambiando el segmento de la URL. Para actuar en
+	 * otro tenant hay que pedir un token para él (token exchange), que lo emite Keycloak tras revalidar
+	 * el acceso. Las llamadas internas de sistema y la cuenta de servicio quedan fuera, igual que en
+	 * FarmSuiteRules; una request sin sesión la sigue gestionando FarmSuiteRules.
+	 */
+	private void assertSessionMayAccessTenant(RequestDetails theRequestDetails, String tenantId) {
+		if (theRequestDetails instanceof SystemRequestDetails || userSessionRepository.isAdmin()) {
+			return;
+		}
+		userSessionRepository.getUserSession().ifPresent(session -> {
+			if (!session.canAccessTenant(tenantId)) {
+				throw new ForbiddenOperationException(
+					"El tenant '" + tenantId + "' no es el de la sesión del usuario");
+			}
+		});
 	}
 }

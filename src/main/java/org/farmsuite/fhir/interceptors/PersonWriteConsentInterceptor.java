@@ -6,6 +6,7 @@ import ca.uhn.fhir.interceptor.api.Pointcut;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
 import ca.uhn.fhir.rest.server.exceptions.ForbiddenOperationException;
 import lombok.RequiredArgsConstructor;
+import org.farmsuite.fhir.consent.ConsentMatcher.Access;
 import org.farmsuite.fhir.consent.FarmSuiteConsentService;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.springframework.stereotype.Component;
@@ -25,22 +26,22 @@ public class PersonWriteConsentInterceptor {
 
 	@Hook(Pointcut.STORAGE_PRESTORAGE_RESOURCE_CREATED)
 	public void onCreated(IBaseResource theResource, RequestDetails theRequestDetails) {
-		check(theResource, theRequestDetails);
+		check(theResource, theRequestDetails, Access.WRITE);
 	}
 
 	@Hook(Pointcut.STORAGE_PRESTORAGE_RESOURCE_UPDATED)
 	public void onUpdated(IBaseResource theOldResource, IBaseResource theNewResource, RequestDetails theRequestDetails) {
-		check(theOldResource, theRequestDetails); // no se puede quitar el paciente para esquivar el control
-		check(theNewResource, theRequestDetails);
+		check(theOldResource, theRequestDetails, Access.WRITE); // no se puede quitar el paciente para esquivar el control
+		check(theNewResource, theRequestDetails, Access.WRITE);
 	}
 
 	@Hook(Pointcut.STORAGE_PRESTORAGE_RESOURCE_DELETED)
 	public void onDeleted(IBaseResource theResource, RequestDetails theRequestDetails) {
-		check(theResource, theRequestDetails);
+		check(theResource, theRequestDetails, Access.DELETE);
 	}
 
-	private void check(IBaseResource resource, RequestDetails requestDetails) {
-		if (resource == null || consentService.mayWrite(requestDetails, resource)) return;
+	private void check(IBaseResource resource, RequestDetails requestDetails, Access access) {
+		if (resource == null || consentService.mayWrite(requestDetails, resource, access)) return;
 		throw new ForbiddenOperationException(
 			"Sin consentimiento de la persona para modificar " + resource.fhirType() + "/" + resource.getIdElement().getIdPart());
 	}

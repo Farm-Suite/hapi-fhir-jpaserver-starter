@@ -1,5 +1,6 @@
 package org.farmsuite.fhir.consent;
 
+import org.hl7.fhir.r5.model.CodeableConcept;
 import org.hl7.fhir.r5.model.Coding;
 import org.hl7.fhir.r5.model.Consent;
 import org.hl7.fhir.r5.model.Enumerations;
@@ -94,6 +95,77 @@ class ConsentMatcherTest {
 	}
 
 	@Test
+	void aPractitionerGrantee_coversThatPractitionerOnly() {
+		Consent consent = permit();
+		consent.getGrantee().clear();
+		consent.addGrantee(new Reference("Practitioner/dr-1"));
+
+		assertThat(ConsentMatcher.permits(consent, actor("dr-1", null), "Observation", ConsentMatcher.Access.READ, NOW)).isTrue();
+		assertThat(ConsentMatcher.permits(consent, actor("dr-2", null), "Observation", ConsentMatcher.Access.READ, NOW)).isFalse();
+		assertThat(ConsentMatcher.permits(consent, actor("dr-1", "other-org"), "Observation", ConsentMatcher.Access.READ, NOW)).isTrue();
+	}
+
+	@Test
+	void anOrganizationGrantee_coversAnyPractitionerActingForIt() {
+		assertThat(ConsentMatcher.permits(permit(), actor("dr-1", PHARMACY), "Observation", ConsentMatcher.Access.READ, NOW)).isTrue();
+		assertThat(ConsentMatcher.permits(permit(), actor("dr-1", "other-org"), "Observation", ConsentMatcher.Access.READ, NOW)).isFalse();
+	}
+
+	@Test
+	void withoutAnAction_theConsentIsReadOnly() {
+		Consent consent = permit();
+		consent.addProvision().addResourceType(new Coding().setCode("Observation"));
+
+		assertThat(ConsentMatcher.permits(consent, actor(null, PHARMACY), "Observation", ConsentMatcher.Access.READ, NOW)).isTrue();
+		assertThat(ConsentMatcher.permits(consent, actor(null, PHARMACY), "Observation", ConsentMatcher.Access.WRITE, NOW)).isFalse();
+	}
+
+	@Test
+	void aConsentWithoutProvisions_neverGrantsWriting() {
+		assertThat(ConsentMatcher.permits(permit(), actor(null, PHARMACY), "Observation", ConsentMatcher.Access.WRITE, NOW)).isFalse();
+	}
+
+	@Test
+	void theWriteAction_permitsWritingAndAlsoReading() {
+		Consent consent = permit();
+		consent.addProvision().addAction(new CodeableConcept().addCoding(new Coding().setCode("write")))
+			.addResourceType(new Coding().setCode("Observation"));
+
+		assertThat(ConsentMatcher.permits(consent, actor(null, PHARMACY), "Observation", ConsentMatcher.Access.WRITE, NOW)).isTrue();
+		assertThat(ConsentMatcher.permits(consent, actor(null, PHARMACY), "Observation", ConsentMatcher.Access.READ, NOW)).isTrue();
+		assertThat(ConsentMatcher.permits(consent, actor(null, PHARMACY), "Condition", ConsentMatcher.Access.WRITE, NOW)).isFalse();
+	}
+
+	@Test
+	void theReadAction_doesNotPermitWriting() {
+		Consent consent = permit();
+		consent.addProvision().addAction(new CodeableConcept().addCoding(new Coding().setCode("read")));
+
+		assertThat(ConsentMatcher.permits(consent, actor(null, PHARMACY), "Observation", ConsentMatcher.Access.READ, NOW)).isTrue();
+		assertThat(ConsentMatcher.permits(consent, actor(null, PHARMACY), "Observation", ConsentMatcher.Access.WRITE, NOW)).isFalse();
+	}
+
+	@Test
+	void deleting_isNeverGrantedByAConsent() {
+		Consent consent = permit();
+		consent.addProvision().addAction(new CodeableConcept().addCoding(new Coding().setCode("write")));
+
+		assertThat(ConsentMatcher.permits(consent, actor(null, PHARMACY), "Observation", ConsentMatcher.Access.DELETE, NOW)).isFalse();
+	}
+
+	@Test
+	void eachProvisionCarriesItsOwnModeAndTypes() {
+		Consent consent = permit();
+		consent.addProvision().addAction(new CodeableConcept().addCoding(new Coding().setCode("read")))
+			.addResourceType(new Coding().setCode("Observation"));
+		consent.addProvision().addAction(new CodeableConcept().addCoding(new Coding().setCode("write")))
+			.addResourceType(new Coding().setCode("MedicationAdministration"));
+
+		assertThat(ConsentMatcher.permits(consent, actor(null, PHARMACY), "Observation", ConsentMatcher.Access.WRITE, NOW)).isFalse();
+		assertThat(ConsentMatcher.permits(consent, actor(null, PHARMACY), "MedicationAdministration", ConsentMatcher.Access.WRITE, NOW)).isTrue();
+	}
+
+	@Test
 	void nullConsent_doesNotPermit() {
 		assertThat(ConsentMatcher.permits(null, PHARMACY, "Observation", NOW)).isFalse();
 	}
@@ -104,6 +176,10 @@ class ConsentMatcherTest {
 		consent.setDecision(Enumerations.ConsentProvisionType.PERMIT);
 		consent.addGrantee(new Reference("Organization/" + PHARMACY));
 		return consent;
+	}
+
+	private static ConsentMatcher.Actor actor(String practitionerId, String organizationId) {
+		return new ConsentMatcher.Actor(practitionerId, organizationId);
 	}
 
 	private static Date date(String iso) {

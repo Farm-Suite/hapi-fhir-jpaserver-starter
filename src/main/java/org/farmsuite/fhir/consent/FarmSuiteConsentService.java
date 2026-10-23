@@ -8,6 +8,8 @@ import ca.uhn.fhir.rest.server.interceptor.consent.ConsentOutcome;
 import ca.uhn.fhir.rest.server.interceptor.consent.IConsentContextServices;
 import ca.uhn.fhir.rest.server.interceptor.consent.IConsentService;
 import lombok.extern.slf4j.Slf4j;
+import org.farmsuite.fhir.consent.ConsentMatcher.Access;
+import org.farmsuite.fhir.consent.ConsentMatcher.Actor;
 import org.farmsuite.fhir.consent.PersonAccessPolicy.Decision;
 import org.farmsuite.fhir.interceptors.ClinicalAccessAuditInterceptor;
 import org.farmsuite.sso.session.UserSessionModel;
@@ -73,19 +75,21 @@ public class FarmSuiteConsentService implements IConsentService {
 
 	@Override
 	public ConsentOutcome canSeeResource(RequestDetails requestDetails, IBaseResource resource, IConsentContextServices contextServices) {
-		if (evaluate(requestDetails, resource) != Decision.DENY) return ConsentOutcome.PROCEED;
+		if (evaluate(requestDetails, resource, Access.READ) != Decision.DENY) return ConsentOutcome.PROCEED;
 		deniedIn(requestDetails).add(resource.fhirType() + "/" + resource.getIdElement().getIdPart());
 		return ConsentOutcome.REJECT;
 	}
 
 	/**
-	 * ¿Puede quien hace la petición escribir este recurso? Misma regla que para leer: un recurso de
-	 * una persona que gestiona otra organización solo se toca con Consent. No se aplica a la cuenta
-	 * de servicio ni a las operaciones internas del servidor. Si deniega, deja el AuditEvent.
+	 * ¿Puede quien hace la petición modificar este recurso? Misma regla que para leer: un recurso de
+	 * una persona que gestiona otra organización solo se toca con Consent, y el Consent tiene que
+	 * conceder escritura ({@code provision.action = write}); borrar no se concede nunca por Consent. No
+	 * se aplica a la cuenta de servicio ni a las operaciones internas del servidor. Si deniega, deja el
+	 * AuditEvent.
 	 */
-	public boolean mayWrite(RequestDetails requestDetails, IBaseResource resource) {
+	public boolean mayWrite(RequestDetails requestDetails, IBaseResource resource, Access access) {
 		if (requestDetails == null || requestDetails instanceof SystemRequestDetails || userSessionRepository.isAdmin()) return true;
-		boolean denied = evaluate(requestDetails, resource) == Decision.DENY;
+		boolean denied = evaluate(requestDetails, resource, access) == Decision.DENY;
 		if (denied) {
 			deniedIn(requestDetails).add(resource.fhirType() + "/" + resource.getIdElement().getIdPart());
 			auditDenied(requestDetails);
@@ -94,7 +98,7 @@ public class FarmSuiteConsentService implements IConsentService {
 	}
 
 	/** La decisión para un recurso; cualquier cosa que no sea DENY deja pasar (incluido lo que no cuelga de una persona). */
-	private Decision evaluate(RequestDetails requestDetails, IBaseResource resource) {
+	private Decision evaluate(RequestDetails requestDetails, IBaseResource resource, Access access) {
 		if (!PatientSubjectResolver.PATIENT_LINKED_TYPES.contains(resource.fhirType())) return Decision.ALLOW_NOT_A_PERSON;
 
 		String tenantId = requestDetails.getTenantId();
@@ -104,12 +108,14 @@ public class FarmSuiteConsentService implements IConsentService {
 		if (patient.isEmpty()) return Decision.ALLOW_NOT_A_PERSON; // sin paciente identificable no hay dato personal que proteger
 
 		String actorOrganizationId = userSessionRepository.getUserSession().map(UserSessionModel::getOrganizationId).orElse(null);
+		String actorPractitionerId = userSessionRepository.getUserSession().map(UserSessionModel::getPractitionerId).orElse(null);
 		Decision decision = PersonAccessPolicy.decide(
 			patient.get(),
-			actorOrganizationId,
+			new Actor(actorPractitionerId, actorOrganizationId),
 			resource.fhirType(),
+			access,
 			(organization, ancestor) -> patientSubjectResolver.isWithin(tenantId, organization, ancestor, requestDetails),
-			(patientId, organization, type, now) -> permitsCached(tenantId, patientId, organization, type, now, requestDetails),
+			(patientId, actor, type, mode, now) -> permitsCached(tenantId, patientId, actor, type, mode, now, requestDetails),
 			Instant.now(),
 			requireOrganization);
 
@@ -125,11 +131,11 @@ public class FarmSuiteConsentService implements IConsentService {
 		return decision;
 	}
 
-	private boolean permitsCached(String tenantId, String patientId, String organization, String type, Instant now, RequestDetails requestDetails) {
-		String key = "farmsuite.consent." + tenantId + "/" + patientId + "/" + organization + "/" + type;
+	private boolean permitsCached(String tenantId, String patientId, Actor actor, String type, Access access, Instant now, RequestDetails requestDetails) {
+		String key = "farmsuite.consent." + tenantId + "/" + patientId + "/" + actor.organizationId() + "/" + actor.practitionerId() + "/" + type + "/" + access;
 		Object cached = requestDetails.getUserData().get(key);
 		if (cached instanceof Boolean allowed) return allowed;
-		boolean allowed = consentFinder.permits(tenantId, patientId, organization, type, now);
+		boolean allowed = consentFinder.permits(tenantId, patientId, actor, type, access, now);
 		requestDetails.getUserData().put(key, allowed);
 		return allowed;
 	}

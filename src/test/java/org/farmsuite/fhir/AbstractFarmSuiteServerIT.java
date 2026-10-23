@@ -146,6 +146,20 @@ abstract class AbstractFarmSuiteServerIT {
 		return client;
 	}
 
+	/** Cliente sobre la partición de otro tenant (por URL), autenticado con el Bearer de pruebas. */
+	protected IGenericClient clientFor(String tenant) {
+		return client("http://localhost:" + port + "/fhir/" + tenant);
+	}
+
+	/** Crea una partición de tenant con el id dado (operación de servidor; requiere la cuenta de servicio). */
+	protected void createPartition(int id, String name) {
+		Parameters in = new Parameters();
+		in.addParameter().setName("id").setValue(new IntegerType(id));
+		in.addParameter().setName("name").setValue(new CodeType(name));
+		client("http://localhost:" + port + "/fhir").operation().onServer()
+			.named("$partition-management-create-partition").withParameters(in).execute();
+	}
+
 	private void createBaseData() {
 		if (baseDataCreated) return;
 		Parameters in = new Parameters();

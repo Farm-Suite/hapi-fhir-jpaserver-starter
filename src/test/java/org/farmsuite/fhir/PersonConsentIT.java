@@ -5,6 +5,7 @@ import ca.uhn.fhir.rest.server.exceptions.ForbiddenOperationException;
 import org.farmsuite.fhir.consent.SubjectKind;
 import org.hl7.fhir.r5.model.AuditEvent;
 import org.hl7.fhir.r5.model.Bundle;
+import org.hl7.fhir.r5.model.CodeableConcept;
 import org.hl7.fhir.r5.model.Coding;
 import org.hl7.fhir.r5.model.Consent;
 import org.hl7.fhir.r5.model.Enumerations;
@@ -199,12 +200,60 @@ class PersonConsentIT extends AbstractFarmSuiteServerIT {
 	}
 
 	@Test
-	void externalOrganizationWithAnActiveConsent_canWriteForAPerson() {
+	void externalOrganizationWithAReadOnlyConsent_cannotWriteForAPerson() {
 		Fixture f = personWithObservation();
 		consent(Enumerations.ConsentProvisionType.PERMIT, Consent.ConsentState.ACTIVE, "Patient/" + f.patientId, null);
 		asHuman("pr-7", EXTERNAL, CAN_WRITE);
 
+		assertThatThrownBy(() -> tenantClient.create().resource(observationFor(f)).execute())
+			.isInstanceOf(ForbiddenOperationException.class);
+	}
+
+	@Test
+	void externalOrganizationWithAWriteConsent_canWriteTheCoveredTypesForAPerson() {
+		Fixture f = personWithObservation();
+		grant("Organization/" + EXTERNAL, "Patient/" + f.patientId, "write", "Observation");
+		asHuman("pr-7", EXTERNAL, CAN_WRITE);
+
 		assertThatCode(() -> tenantClient.create().resource(observationFor(f)).execute()).doesNotThrowAnyException();
+		assertThat(searchObservations(f)).hasSize(2); // y, al escribir, también lo puede leer
+	}
+
+	/** Sobre esto se apoya comprobar si un actor tiene algún Consent en un tenant: la búsqueda por destinatario de un solo valor. */
+	@Test
+	void consentsCanBeSearchedByAPractitionerOrAnOrganizationGrantee() {
+		Fixture f = personWithObservation();
+		grant("Practitioner/pr-7", "Patient/" + f.patientId, null, null);
+		grant("Organization/" + EXTERNAL, "Patient/" + f.patientId, null, null);
+		asServiceAccount("pr-admin");
+
+		assertThat(tenantClient.search().forResource(Consent.class).where(Consent.GRANTEE.hasId("Practitioner/pr-7"))
+			.returnBundle(Bundle.class).execute().getEntry()).isNotEmpty();
+		assertThat(tenantClient.search().forResource(Consent.class).where(Consent.GRANTEE.hasId("Organization/" + EXTERNAL))
+			.returnBundle(Bundle.class).execute().getEntry()).isNotEmpty();
+		assertThat(tenantClient.search().forResource(Consent.class).where(Consent.GRANTEE.hasId("Practitioner/pr-9"))
+			.returnBundle(Bundle.class).execute().getEntry()).isEmpty();
+	}
+
+	@Test
+	void aWriteConsent_neverAllowsDeleting() {
+		Fixture f = personWithObservation();
+		grant("Organization/" + EXTERNAL, "Patient/" + f.patientId, "write", "Observation");
+		asHuman("pr-7", EXTERNAL, CAN_WRITE);
+
+		assertThatThrownBy(() -> tenantClient.delete().resourceById("Observation", f.observationId).execute())
+			.isInstanceOf(ForbiddenOperationException.class);
+	}
+
+	@Test
+	void aConsentGrantedToAPractitioner_coversThatPractitionerWhateverTheirOrganization() {
+		Fixture f = personWithObservation();
+		grant("Practitioner/pr-7", "Patient/" + f.patientId, null, null);
+
+		asHuman("pr-7", EXTERNAL, CAN_READ);
+		assertCanRead(f);
+		asHuman("pr-9", EXTERNAL, CAN_READ);
+		assertCannotRead(f);
 	}
 
 	@Test
@@ -272,6 +321,22 @@ class PersonConsentIT extends AbstractFarmSuiteServerIT {
 		consent.addGrantee(new Reference("Organization/" + EXTERNAL));
 		if (resourceType != null) consent.addProvision().addResourceType(new Coding().setCode(resourceType));
 		return tenantClient.create().resource(consent).execute().getId().getIdPart();
+	}
+
+	/** Un Consent activo a favor de {@code grantee} (Organization/ o Practitioner/), con acción y tipo de recurso opcionales. */
+	private void grant(String grantee, String subject, String action, String resourceType) {
+		asServiceAccount("pr-admin");
+		Consent consent = new Consent();
+		consent.setStatus(Consent.ConsentState.ACTIVE);
+		consent.setDecision(Enumerations.ConsentProvisionType.PERMIT);
+		consent.setSubject(new Reference(subject));
+		consent.addGrantee(new Reference(grantee));
+		if (action != null || resourceType != null) {
+			Consent.ProvisionComponent provision = consent.addProvision();
+			if (action != null) provision.addAction(new CodeableConcept().addCoding(new Coding().setCode(action)));
+			if (resourceType != null) provision.addResourceType(new Coding().setCode(resourceType));
+		}
+		tenantClient.create().resource(consent).execute();
 	}
 
 	private void assertCanRead(Fixture f) {
