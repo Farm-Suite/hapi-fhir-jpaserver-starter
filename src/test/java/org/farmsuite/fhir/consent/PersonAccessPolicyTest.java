@@ -75,4 +75,28 @@ class PersonAccessPolicyTest {
 		assertThat(PersonAccessPolicy.decide(person(null), "pharmacy-ext", "Observation", ONLY_SELF, NO_CONSENT, NOW))
 			.isEqualTo(Decision.ALLOW_WITHOUT_ORGANIZATION_CONTEXT);
 	}
+
+	@Test
+	void requireOrganization_deniesASessionWithoutOrganization_butNotOneThatHasIt() {
+		assertThat(PersonAccessPolicy.decide(person("org-1"), null, "Observation", ONLY_SELF, ALWAYS_CONSENT, NOW, true))
+			.isEqualTo(Decision.DENY);
+		assertThat(PersonAccessPolicy.decide(person("org-1"), " ", "Observation", ONLY_SELF, ALWAYS_CONSENT, NOW, true))
+			.isEqualTo(Decision.DENY);
+		assertThat(PersonAccessPolicy.decide(person("org-1"), "org-1", "Observation", ONLY_SELF, NO_CONSENT, NOW, true))
+			.isEqualTo(Decision.ALLOW_CARE_RELATIONSHIP);
+	}
+
+	@Test
+	void requireOrganization_doesNotAffectAnimalsOrPlants() {
+		assertThat(PersonAccessPolicy.decide(new PatientFacts("a1", SubjectKind.ANIMAL, "org-1"), null, "Observation", ONLY_SELF, NO_CONSENT, NOW, true))
+			.isEqualTo(Decision.ALLOW_NOT_A_PERSON);
+	}
+
+	@Test
+	void aPatientThatCouldNotBeRead_isDeniedEvenToItsManagingOrganization() {
+		assertThat(PersonAccessPolicy.decide(PatientFacts.unresolved("p1"), "org-1", "Observation", ONLY_SELF, ALWAYS_CONSENT, NOW))
+			.isEqualTo(Decision.DENY);
+		assertThat(PersonAccessPolicy.decide(PatientFacts.unresolved("p1"), null, "Observation", ONLY_SELF, ALWAYS_CONSENT, NOW))
+			.isEqualTo(Decision.DENY);
+	}
 }

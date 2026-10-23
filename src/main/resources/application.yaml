@@ -98,6 +98,7 @@ hapi:
       - org.farmsuite.fhir.interceptors.ClinicalAccessAuditInterceptor
       - org.farmsuite.fhir.interceptors.ConsentProvenanceInterceptor
       - org.farmsuite.fhir.interceptors.FarmSuiteConsentInterceptor
+      - org.farmsuite.fhir.interceptors.PersonWriteConsentInterceptor
     custom-bean-packages: org.farmsuite.fhir
 
 sso:
@@ -122,6 +123,11 @@ farmsuite:
     # Tope total (token + llamada) de cada sincronización del espejo de Task.owner; al vencer se
     # descarta (best-effort) en vez de retener la transacción de la Task.
     timeout: 5s
+  consent:
+    # true: una sesión sin organización no accede ni escribe datos de personas. false (por ahora): se
+    # permite, porque el dueño del tenant puede no haber elegido organización; pasar a true cuando
+    # el login exija organización y las personas tengan managingOrganization.
+    require-organization: false
   traceability:
     # false: si no se puede escribir un Provenance/AuditEvent se registra el error y la operación
     # continúa. true: la operación se rechaza (sin traza no hay cambio ni acceso clínico), pero SOLO

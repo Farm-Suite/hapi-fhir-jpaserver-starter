@@ -3,6 +3,8 @@ package org.farmsuite.fhir.consent;
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.jpa.api.dao.DaoRegistry;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
+import ca.uhn.fhir.rest.server.exceptions.ResourceGoneException;
+import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.hl7.fhir.instance.model.api.IBase;
@@ -63,10 +65,13 @@ public class PatientSubjectResolver {
 			PatientFacts facts = toFacts(patientId, patient);
 			cache.put(key, facts);
 			return Optional.of(facts);
-		} catch (RuntimeException e) {
-			log.warn("No se pudo leer Patient/{} del tenant {} para clasificar el acceso", patientId, tenantId, e);
-			cache.put(key, MISSING);
+		} catch (ResourceNotFoundException | ResourceGoneException e) {
+			cache.put(key, MISSING); // referencia a un paciente que no existe: no hay dato personal que proteger
 			return Optional.empty();
+		} catch (RuntimeException e) {
+			// Existe pero no se pudo leer: no se sabe si es una persona, así que se protege (fail-closed).
+			log.warn("No se pudo leer Patient/{} del tenant {} para clasificar el acceso; se deniega", patientId, tenantId, e);
+			return Optional.of(PatientFacts.unresolved(patientId)); // sin cachear: puede ser un fallo transitorio
 		}
 	}
 

@@ -171,6 +171,7 @@ applicationYaml: |
         - org.farmsuite.fhir.interceptors.ClinicalAccessAuditInterceptor
         - org.farmsuite.fhir.interceptors.ConsentProvenanceInterceptor
         - org.farmsuite.fhir.interceptors.FarmSuiteConsentInterceptor
+        - org.farmsuite.fhir.interceptors.PersonWriteConsentInterceptor
       custom-bean-packages: org.farmsuite.fhir
 
   sso:
@@ -195,6 +196,9 @@ applicationYaml: |
       client-secret: "wRJVjXNxkWKE4hlvtBtFcqjsfPw7xqph"
       # Tope total (token + llamada) de cada sincronización del espejo de Task.owner.
       timeout: 5s
+    consent:
+      # Ver application.yaml: true cierra el acceso a personas para sesiones sin organización.
+      require-organization: false
     traceability:
       # Si no se puede escribir el Provenance/AuditEvent de datos de PERSONAS (RGPD) se rechaza la
       # operación; animales, árboles y tareas operativas siguen en best-effort.

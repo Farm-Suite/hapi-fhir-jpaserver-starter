@@ -1,6 +1,7 @@
 package org.farmsuite.fhir;
 
 import ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException;
+import ca.uhn.fhir.rest.server.exceptions.ForbiddenOperationException;
 import org.farmsuite.fhir.consent.SubjectKind;
 import org.hl7.fhir.r5.model.AuditEvent;
 import org.hl7.fhir.r5.model.Bundle;
@@ -30,6 +31,7 @@ import static org.awaitility.Awaitility.await;
 class PersonConsentIT extends AbstractFarmSuiteServerIT {
 
 	private static final List<String> CAN_READ = List.of("Patient.rs", "Observation.rs");
+	private static final List<String> CAN_WRITE = List.of("Patient.rs", "Observation.rscud");
 	private static final String EXTERNAL = "pharmacy-ext";
 
 	@Test
@@ -146,7 +148,7 @@ class PersonConsentIT extends AbstractFarmSuiteServerIT {
 
 		asServiceAccount("pr-admin");
 		await().untilAsserted(() -> {
-			Bundle bundle = tenantClient.search().forResource(AuditEvent.class).returnBundle(Bundle.class).execute();
+			Bundle bundle = tenantClient.search().forResource(AuditEvent.class).count(500).returnBundle(Bundle.class).execute();
 			List<AuditEvent> denied = bundle.getEntry().stream().map(e -> (AuditEvent) e.getResource())
 				.filter(ev -> "4".equals(ev.getOutcome().getCode().getCode()))
 				.filter(ev -> ev.getEntity().stream().anyMatch(en -> en.getWhat().getReference().equals("Patient/" + f.patientId)
@@ -186,11 +188,60 @@ class PersonConsentIT extends AbstractFarmSuiteServerIT {
 	}
 
 	@Test
+	void externalOrganizationWithoutConsent_cannotWriteForAPerson() {
+		Fixture f = personWithObservation();
+		asHuman("pr-7", EXTERNAL, CAN_WRITE);
+
+		assertThatThrownBy(() -> tenantClient.create().resource(observationFor(f)).execute())
+			.isInstanceOf(ForbiddenOperationException.class);
+		assertThatThrownBy(() -> tenantClient.delete().resourceById("Observation", f.observationId).execute())
+			.isInstanceOf(ForbiddenOperationException.class);
+	}
+
+	@Test
+	void externalOrganizationWithAnActiveConsent_canWriteForAPerson() {
+		Fixture f = personWithObservation();
+		consent(Enumerations.ConsentProvisionType.PERMIT, Consent.ConsentState.ACTIVE, "Patient/" + f.patientId, null);
+		asHuman("pr-7", EXTERNAL, CAN_WRITE);
+
+		assertThatCode(() -> tenantClient.create().resource(observationFor(f)).execute()).doesNotThrowAnyException();
+	}
+
+	@Test
+	void managingOrganization_canWriteForItsPersonWithoutConsent() {
+		Fixture f = personWithObservation();
+		asHuman("pr-7", "org-1", CAN_WRITE);
+
+		assertThatCode(() -> tenantClient.create().resource(observationFor(f)).execute()).doesNotThrowAnyException();
+	}
+
+	@Test
+	void writingForAnAnimal_isNotSubjectToConsent() {
+		asServiceAccount("pr-admin");
+		Patient animal = new Patient();
+		animal.getMeta().addProfile(SubjectKind.ANIMAL_PROFILE);
+		animal.addName().setFamily("Vaca 12");
+		animal.setManagingOrganization(new Reference("Organization/org-1"));
+		String animalId = tenantClient.create().resource(animal).execute().getId().getIdPart();
+		asHuman("pr-7", EXTERNAL, CAN_WRITE);
+
+		assertThatCode(() -> tenantClient.create().resource(observationFor(new Fixture(animalId, null))).execute()).doesNotThrowAnyException();
+	}
+
+	@Test
 	void theServiceAccount_isNotSubjectToConsent() {
 		Fixture f = personWithObservation();
 		asServiceAccount("pr-admin");
 
 		assertCanRead(f);
+	}
+
+	private static Observation observationFor(Fixture f) {
+		Observation observation = new Observation();
+		observation.setStatus(Enumerations.ObservationStatus.FINAL);
+		observation.getCode().setText("Temperatura");
+		observation.setSubject(new Reference("Patient/" + f.patientId));
+		return observation;
 	}
 
 	private record Fixture(String patientId, String observationId) {

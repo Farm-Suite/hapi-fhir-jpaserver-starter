@@ -52,7 +52,22 @@ public final class PersonAccessPolicy {
 		ConsentLookup consents,
 		Instant now
 	) {
+		return decide(patient, actorOrganizationId, resourceType, hierarchy, consents, now, false);
+	}
+
+	/** {@code requireOrganization}: una sesión sin organización se deniega en vez de permitirse. */
+	public static Decision decide(
+		PatientFacts patient,
+		String actorOrganizationId,
+		String resourceType,
+		Hierarchy hierarchy,
+		ConsentLookup consents,
+		Instant now,
+		boolean requireOrganization
+	) {
+		if (patient.unresolved()) return Decision.DENY;
 		if (patient.kind() != SubjectKind.PERSON) return Decision.ALLOW_NOT_A_PERSON;
+		if (requireOrganization && isBlank(actorOrganizationId)) return Decision.DENY;
 		if (isBlank(actorOrganizationId) || isBlank(patient.managingOrganizationId())) {
 			return Decision.ALLOW_WITHOUT_ORGANIZATION_CONTEXT;
 		}
