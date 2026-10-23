@@ -1,0 +1,11 @@
+{
+  "resourceType": "SearchParameter",
+  "url": "http://farmsuite.org/fhir/SearchParameter/practitioner-role-practitioner-ref",
+  "name": "PractitionerRolePractitionerRef",
+  "status": "active",
+  "description": "Permite buscar PractitionerRole por la referencia textual de su profesional (Practitioner/x) sin resolverla. El parámetro estándar practitioner resuelve antes el id del Practitioner dentro de las particiones de la petición, y un Practitioner vive en DEFAULT, no en la partición del tenant donde se busca: sale vacío sin error. Es lo que usa el servidor para saber si un profesional es del tenant.",
+  "code": "practitioner-ref",
+  "base": ["PractitionerRole"],
+  "type": "token",
+  "expression": "PractitionerRole.practitioner.reference"
+}

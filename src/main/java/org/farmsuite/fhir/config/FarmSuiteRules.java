@@ -246,6 +246,9 @@ public class FarmSuiteRules extends AuthorizationInterceptor {
 				builder = builder.allow().write().resourcesOfType(resourceClass).withAnyId().forTenantIds(tenantId).andThen();
 			}
 		}
+		// El contexto de las tareas del responsable (su localización): solo lectura, y qué localización lo decide
+		// FarmSuiteConsentService por las tareas que tiene asignadas.
+		builder = builder.allow().read().resourcesOfType(org.hl7.fhir.r5.model.Location.class).withAnyId().forTenantIds(tenantId).andThen();
 		return builder;
 	}
 

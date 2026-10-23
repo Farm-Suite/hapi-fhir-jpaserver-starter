@@ -1,6 +1,9 @@
 package org.farmsuite.fhir.consent;
 
 import ca.uhn.fhir.jpa.api.dao.DaoRegistry;
+import ca.uhn.fhir.jpa.searchparam.SearchParameterMap;
+import ca.uhn.fhir.rest.api.server.IBundleProvider;
+import ca.uhn.fhir.rest.param.ReferenceParam;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
 import ca.uhn.fhir.rest.api.server.SystemRequestDetails;
 import ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException;
@@ -17,6 +20,7 @@ import org.farmsuite.sso.session.UserSessionRepository;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r5.model.AuditEvent;
 import org.hl7.fhir.r5.model.IdType;
+import org.hl7.fhir.r5.model.Location;
 import org.hl7.fhir.r5.model.PractitionerRole;
 import org.hl7.fhir.r5.model.Task;
 import org.springframework.beans.factory.annotation.Value;
@@ -120,6 +124,34 @@ public class FarmSuiteConsentService implements IConsentService {
 		return mayWrite(requestDetails, resource, Access.WRITE);
 	}
 
+	/**
+	 * Actualizar un recurso. Como {@link #mayWrite} sobre el recurso viejo y el nuevo, salvo que un externo (entra
+	 * por Consent) no puede cambiar a quién se refiere su tarea, de qué tipo es ni quién es el responsable: puede
+	 * aceptarla, comentarla y detallarla, no redirigirla ni pasársela a otro.
+	 */
+	public boolean mayUpdate(RequestDetails requestDetails, IBaseResource oldResource, IBaseResource newResource) {
+		boolean externalChangingATask = requestDetails != null && !(requestDetails instanceof SystemRequestDetails)
+			&& !userSessionRepository.isAdmin() && oldResource instanceof Task oldTask && newResource instanceof Task newTask
+			&& tenantAccess.resolve(requestDetails) == TenantAccessService.Kind.BY_CONSENT;
+		if (externalChangingATask && !sameTaskAssignment((Task) oldResource, (Task) newResource)) {
+			deniedIn(requestDetails).add(newResource.fhirType() + "/" + newResource.getIdElement().getIdPart());
+			auditDenied(requestDetails);
+			return false;
+		}
+		return mayWrite(requestDetails, oldResource, Access.WRITE) && mayWrite(requestDetails, newResource, Access.WRITE);
+	}
+
+	private static boolean sameTaskAssignment(Task before, Task after) {
+		return sameReference(before.getOwner(), after.getOwner())
+			&& sameReference(before.getFor(), after.getFor())
+			&& java.util.Objects.equals(before.getCode().getCodingFirstRep().getCode(), after.getCode().getCodingFirstRep().getCode())
+			&& java.util.Objects.equals(before.getCode().getCodingFirstRep().getSystem(), after.getCode().getCodingFirstRep().getSystem());
+	}
+
+	private static boolean sameReference(org.hl7.fhir.r5.model.Reference a, org.hl7.fhir.r5.model.Reference b) {
+		return java.util.Objects.equals(a == null ? null : a.getReference(), b == null ? null : b.getReference());
+	}
+
 	/** La decisión para un recurso; cualquier cosa que no sea DENY deja pasar (incluido lo que no cuelga de una persona). */
 	private Decision evaluate(RequestDetails requestDetails, IBaseResource resource, Access access) {
 		if (tenantAccess.resolve(requestDetails) == TenantAccessService.Kind.BY_CONSENT) {
@@ -167,13 +199,20 @@ public class FarmSuiteConsentService implements IConsentService {
 	 */
 	private Decision evaluateExternal(RequestDetails requestDetails, IBaseResource resource, Access access) {
 		String type = resource.fhirType();
-		if (!PatientSubjectResolver.PATIENT_LINKED_TYPES.contains(type)) return Decision.ALLOW_NOT_A_PERSON;
-
 		String tenantId = requestDetails.getTenantId();
 		var session = userSessionRepository.getUserSession();
 		Actor actor = new Actor(
 			session.map(UserSessionModel::getPractitionerId).orElse(null),
 			session.map(UserSessionModel::getOrganizationId).orElse(null));
+
+		// El contexto de una tarea suya (su localización, o su destino si es una localización) se lee, no se escribe.
+		if (resource instanceof Location location) {
+			boolean context = access == Access.READ && location.hasIdElement()
+				&& isContextOfOwnTask(tenantId, location.getIdElement().getIdPart(), actor, requestDetails);
+			return context ? Decision.ALLOW_CONSENT : Decision.DENY;
+		}
+
+		if (!PatientSubjectResolver.PATIENT_LINKED_TYPES.contains(type)) return Decision.ALLOW_NOT_A_PERSON;
 
 		if (resource instanceof Task task) {
 			boolean mine = access != Access.DELETE
@@ -193,6 +232,28 @@ public class FarmSuiteConsentService implements IConsentService {
 				patient.get().patientId(), tenantId, access);
 		}
 		return decision;
+	}
+
+	/** ¿Referencia {@code Task.location} (o {@code Task.for}) a esta localización alguna tarea de la que el actor es responsable? */
+	private boolean isContextOfOwnTask(String tenantId, String locationId, Actor actor, RequestDetails requestDetails) {
+		String key = "farmsuite.location-context." + tenantId + "/" + locationId + "/" + actor.practitionerId() + "/" + actor.organizationId();
+		Object cached = requestDetails.getUserData().get(key);
+		if (cached instanceof Boolean known) return known;
+		boolean context = false;
+		try {
+			for (String param : List.of("task-location", "subject")) {
+				SearchParameterMap map = new SearchParameterMap();
+				map.add(param, new ReferenceParam("Location/" + locationId));
+				IBundleProvider tasks = daoRegistry.getResourceDao(Task.class).search(map, tenantRequests.systemIn(tenantId));
+				context = tasks.getAllResources().stream().anyMatch(t -> t instanceof Task task
+					&& TaskOwnership.ownedBy(task, actor, role -> practitionerOfRole(tenantId, role, requestDetails)));
+				if (context) break;
+			}
+		} catch (RuntimeException e) {
+			log.warn("No se pudo comprobar si Location/{} es contexto de una tarea de {} (tenant {}): se deniega", locationId, actor, tenantId, e);
+		}
+		requestDetails.getUserData().put(key, context);
+		return context;
 	}
 
 	/** El profesional de un PractitionerRole del tenant, o {@code null} si no existe o no se puede leer. */

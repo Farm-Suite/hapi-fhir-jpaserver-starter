@@ -25,8 +25,6 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -56,7 +54,6 @@ import static org.mockito.Mockito.when;
  * (partición DEFAULT); organizaciones {@code org-1} (granja), {@code org-1-sub} (cuelga de org-1) y
  * {@code pharmacy-ext} (externa); y {@code role-9}, que enlaza a pr-9 con org-1.
  */
-@Testcontainers
 @ActiveProfiles("test")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, classes = {Application.class}, properties = {
 	"hapi.fhir.fhir_version=r5",
@@ -79,8 +76,18 @@ abstract class AbstractFarmSuiteServerIT {
 
 	protected static final String TENANT = "farm-a";
 
-	@Container
+	/**
+	 * Un único Postgres para toda la JVM de tests, arrancado una vez. Con {@code @Container} se arrancaba y se
+	 * paraba por clase, pero el contexto de Spring está cacheado y compartido entre las clases: la segunda se
+	 * quedaba apuntando al Postgres ya parado de la primera ("Could not open JPA EntityManager"). Lo recoge
+	 * Ryuk al terminar la JVM. Los datos de una clase quedan para las siguientes: cada una usa sus propias
+	 * particiones (farm-a, farm-b…).
+	 */
 	private static final PostgreSQLContainer<?> POSTGRES = TestContainerHelper.newPostgresContainer();
+
+	static {
+		POSTGRES.start();
+	}
 
 	/** Llamadas recibidas por el Administration-MIC de mentira: "PUT /practitioner-tasks/{id} {json}". */
 	protected static final Queue<String> MIRROR_CALLS = new ConcurrentLinkedQueue<>();
@@ -135,6 +142,8 @@ abstract class AbstractFarmSuiteServerIT {
 	void setUpServer() {
 		ctx = FhirContext.forR5Cached();
 		ctx.getRestfulClientFactory().setServerValidationMode(ServerValidationModeEnum.NEVER);
+		// Crear una partición o indexar tras instalar parámetros de búsqueda puede pasar de los 10 s por defecto.
+		ctx.getRestfulClientFactory().setSocketTimeout(90_000);
 		asServiceAccount("pr-admin");
 		tenantClient = client("http://localhost:" + port + "/fhir/" + TENANT);
 		createBaseData();
@@ -213,13 +222,18 @@ abstract class AbstractFarmSuiteServerIT {
 
 	/** Un usuario humano que actúa en nombre de {@code organizationId} (la de su sesión o la de su token exchange). */
 	protected void asHuman(String practitionerId, String organizationId, List<String> permissions) {
+		asHumanOf(TENANT, practitionerId, organizationId, permissions);
+	}
+
+	/** Un usuario humano miembro de {@code tenantId} (su sesión es de ese tenant), no del tenant por defecto de los tests. */
+	protected void asHumanOf(String tenantId, String practitionerId, String organizationId, List<String> permissions) {
 		UserSessionModel session = mock(UserSessionModel.class);
 		when(session.getPractitionerId()).thenReturn(practitionerId);
-		when(session.getTenantId()).thenReturn(TENANT);
+		when(session.getTenantId()).thenReturn(tenantId);
 		when(session.getOrganizationId()).thenReturn(organizationId);
 		when(session.getTypeClient()).thenReturn(UserSessionModel.TypeClient.USER);
 		when(session.getPermission()).thenReturn(permissions);
-		when(session.canAccessTenant(TENANT)).thenReturn(true);
+		when(session.canAccessTenant(tenantId)).thenReturn(true);
 		when(userSessionRepository.isAdmin()).thenReturn(false);
 		when(userSessionRepository.getUserSession()).thenReturn(Optional.of(session));
 	}

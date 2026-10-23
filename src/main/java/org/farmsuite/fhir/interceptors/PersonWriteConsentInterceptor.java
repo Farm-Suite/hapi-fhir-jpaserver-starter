@@ -33,8 +33,10 @@ public class PersonWriteConsentInterceptor {
 
 	@Hook(Pointcut.STORAGE_PRESTORAGE_RESOURCE_UPDATED)
 	public void onUpdated(IBaseResource theOldResource, IBaseResource theNewResource, RequestDetails theRequestDetails) {
-		check(theOldResource, theRequestDetails, Access.WRITE); // no se puede quitar el paciente para esquivar el control
-		check(theNewResource, theRequestDetails, Access.WRITE);
+		// se comprueba el recurso viejo y el nuevo: no se puede quitar el paciente para esquivar el control
+		if (theOldResource == null || theNewResource == null || consentService.mayUpdate(theRequestDetails, theOldResource, theNewResource)) return;
+		throw new ForbiddenOperationException(
+			"Sin consentimiento de la persona para modificar " + theNewResource.fhirType() + "/" + theNewResource.getIdElement().getIdPart());
 	}
 
 	@Hook(Pointcut.STORAGE_PRESTORAGE_RESOURCE_DELETED)

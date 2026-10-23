@@ -1,0 +1,12 @@
+{
+  "resourceType": "SearchParameter",
+  "url": "http://farmsuite.org/fhir/SearchParameter/task-location",
+  "name": "TaskLocation",
+  "status": "active",
+  "description": "Permite buscar Task por su Task.location (Task no tiene un parámetro de búsqueda estándar para él). Lo usa el control de acceso de un externo para saber si una Location es contexto de una tarea suya.",
+  "code": "task-location",
+  "base": ["Task"],
+  "type": "reference",
+  "expression": "Task.location",
+  "target": ["Location"]
+}

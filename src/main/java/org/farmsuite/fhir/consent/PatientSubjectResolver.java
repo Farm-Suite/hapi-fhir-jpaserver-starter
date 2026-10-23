@@ -35,7 +35,7 @@ public class PatientSubjectResolver {
 
 	/** Recursos que cuelgan de un paciente y cuyo acceso se controla y audita. */
 	public static final Set<String> PATIENT_LINKED_TYPES = Set.of(
-		"Patient", "Observation", "Encounter", "EpisodeOfCare", "Procedure", "Immunization",
+		"Patient", "Observation", "Condition", "Encounter", "EpisodeOfCare", "Procedure", "Immunization",
 		"MedicationRequest", "MedicationDispense", "MedicationAdministration", "ServiceRequest", "CarePlan", "Task");
 
 	private static final String[] PATIENT_PATHS = {"subject", "patient", "for"};

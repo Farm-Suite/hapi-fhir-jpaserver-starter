@@ -100,7 +100,11 @@ class TaskTraceabilityIT extends AbstractFarmSuiteServerIT {
 
 		asServiceAccount("pr-admin");
 		await().untilAsserted(() -> {
-			Bundle bundle = tenantClient.search().forResource(AuditEvent.class).returnBundle(Bundle.class).execute();
+			// Solo los de este paciente: otras clases de test comparten la base de datos y dejan muchos AuditEvent
+			// en el tenant, y una búsqueda sin filtrar solo mira la primera página.
+			Bundle bundle = tenantClient.search().forResource(AuditEvent.class)
+				.where(new ca.uhn.fhir.rest.gclient.ReferenceClientParam("entity").hasId("Patient/" + patientId))
+				.returnBundle(Bundle.class).execute();
 			List<AuditEvent> events = bundle.getEntry().stream().map(e -> (AuditEvent) e.getResource()).toList();
 			assertThat(events).anySatisfy(ev -> {
 				assertThat(ev.getAgentFirstRep().getWho().getReference()).isEqualTo("Practitioner/pr-7");

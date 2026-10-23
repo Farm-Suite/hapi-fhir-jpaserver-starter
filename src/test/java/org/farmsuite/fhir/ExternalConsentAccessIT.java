@@ -9,11 +9,13 @@ import org.hl7.fhir.r5.model.Coding;
 import org.hl7.fhir.r5.model.Consent;
 import org.hl7.fhir.r5.model.Enumerations;
 import org.hl7.fhir.r5.model.IdType;
+import org.hl7.fhir.r5.model.Location;
 import org.hl7.fhir.r5.model.MedicationRequest;
 import org.hl7.fhir.r5.model.Observation;
 import org.hl7.fhir.r5.model.Organization;
 import org.hl7.fhir.r5.model.Patient;
 import org.hl7.fhir.r5.model.Practitioner;
+import org.hl7.fhir.r5.model.PractitionerRole;
 import org.hl7.fhir.r5.model.Reference;
 import org.hl7.fhir.r5.model.Task;
 import org.junit.jupiter.api.BeforeEach;
@@ -50,6 +52,8 @@ class ExternalConsentAccessIT extends AbstractFarmSuiteServerIT {
 	private static String observationOfAnimal;
 	private static String taskOfExternal;
 	private static String taskOfSomeoneElse;
+	private static String locationOfTheTask;
+	private static String unrelatedLocation;
 
 	@BeforeEach
 	void createTenantC() {
@@ -83,7 +87,16 @@ class ExternalConsentAccessIT extends AbstractFarmSuiteServerIT {
 		grant("Practitioner/pr-ext-c", p1, null, null);
 		grant("Practitioner/pr-ext-w", p1, "write", "Observation");
 
-		taskOfExternal = clientFor(TENANT_C).create().resource(task("Practitioner/pr-ext-c", p1)).execute().getId().getIdPart();
+		// pr-9 es del tenant (tiene un rol en él): asignarle tareas no exige Consent
+		PractitionerRole role = new PractitionerRole();
+		role.setPractitioner(new Reference("Practitioner/pr-9"));
+		clientFor(TENANT_C).create().resource(role).execute();
+
+		locationOfTheTask = clientFor(TENANT_C).create().resource(location("Establo 1")).execute().getId().getIdPart();
+		unrelatedLocation = clientFor(TENANT_C).create().resource(location("Establo 2")).execute().getId().getIdPart();
+		Task mine = task("Practitioner/pr-ext-c", p1);
+		mine.setLocation(new Reference("Location/" + locationOfTheTask));
+		taskOfExternal = clientFor(TENANT_C).create().resource(mine).execute().getId().getIdPart();
 		taskOfSomeoneElse = clientFor(TENANT_C).create().resource(task("Practitioner/pr-9", p1)).execute().getId().getIdPart();
 		created = true;
 	}
@@ -205,6 +218,57 @@ class ExternalConsentAccessIT extends AbstractFarmSuiteServerIT {
 		someoneElses.setFor(new Reference("Patient/" + p1));
 		assertThatThrownBy(() -> clientFor(TENANT_C).update().resource(someoneElses).execute())
 			.isInstanceOf(ForbiddenOperationException.class);
+	}
+
+	@Test
+	void anExternal_readsTheContextOfItsTask_theLocation_butNotAnUnrelatedOne() {
+		asHuman("pr-ext-c", null, EVERYTHING);
+
+		assertThatCode(() -> clientFor(TENANT_C).read().resource(Location.class).withId(new IdType("Location", locationOfTheTask)).execute())
+			.doesNotThrowAnyException();
+		assertThatThrownBy(() -> clientFor(TENANT_C).read().resource(Location.class).withId(new IdType("Location", unrelatedLocation)).execute())
+			.isInstanceOf(BaseServerResponseException.class);
+	}
+
+	@Test
+	void anExternal_cannotWriteTheContextOfItsTask() {
+		asHuman("pr-ext-c", null, EVERYTHING);
+		Location moved = clientFor(TENANT_C).read().resource(Location.class).withId(new IdType("Location", locationOfTheTask)).execute();
+		moved.setName("Otro nombre");
+
+		assertThatThrownBy(() -> clientFor(TENANT_C).update().resource(moved).execute()).isInstanceOf(ForbiddenOperationException.class);
+	}
+
+	@Test
+	void anExternal_canDetailItsTask_butNotRedirectIt() {
+		asHuman("pr-ext-c", null, EVERYTHING);
+		Task stored = clientFor(TENANT_C).read().resource(Task.class).withId(new IdType("Task", taskOfExternal)).execute();
+
+		Task commented = stored.copy();
+		commented.addNote().setText("Revisado, sin novedad");
+		assertThatCode(() -> clientFor(TENANT_C).update().resource(commented).execute()).doesNotThrowAnyException();
+
+		Task otherPatient = stored.copy();
+		otherPatient.setFor(new Reference("Patient/" + p2));
+		Task otherType = stored.copy();
+		otherType.getCode().addCoding().setSystem("https://farmsuite.org/fhir/DEFAULT/CodeSystem/farm-task-type").setCode("treatment");
+		Task otherOwner = stored.copy();
+		otherOwner.setOwner(new Reference("Practitioner/pr-9"));
+
+		// Se rechaza (403 o 422, según qué comprobación corra antes) y, lo que importa, la tarea no cambia.
+		for (Task redirected : List.of(otherPatient, otherType, otherOwner)) {
+			assertThatThrownBy(() -> clientFor(TENANT_C).update().resource(redirected).execute()).isInstanceOf(BaseServerResponseException.class);
+		}
+		Task after = clientFor(TENANT_C).read().resource(Task.class).withId(new IdType("Task", taskOfExternal)).execute();
+		assertThat(after.getFor().getReference()).isEqualTo("Patient/" + p1);
+		assertThat(after.getOwner().getReference()).isEqualTo("Practitioner/pr-ext-c");
+		assertThat(after.getCode().getCodingFirstRep().getCode()).isEqualTo(stored.getCode().getCodingFirstRep().getCode());
+	}
+
+	private static Location location(String name) {
+		Location location = new Location();
+		location.setName(name);
+		return location;
 	}
 
 	private List<Observation> searchObservationsOf(String patientId) {

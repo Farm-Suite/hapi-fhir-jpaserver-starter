@@ -533,6 +533,21 @@
                 </configuration>
             </plugin>
 
+            <!-- Los tests de integración arrancan Spring + HAPI + un Postgres en Docker cada uno. El POM padre
+                 de HAPI fija forkCount=0.6C con parallel=classes y -Xmx2048m por fork: en una máquina de 20
+                 núcleos son hasta 12 JVM de 2 GB a la vez, que tumban una WSL de 10 GB. Un solo fork y las clases
+                 en secuencia; el arranque de Spring se comparte entre clases (misma configuración). -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <forkCount>1</forkCount>
+                    <reuseForks>true</reuseForks>
+                    <parallel combine.self="override"></parallel>
+                    <threadCount>1</threadCount>
+                </configuration>
+            </plugin>
+
             <!-- Tell Maven which Java source version you want to use -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

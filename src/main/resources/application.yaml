@@ -100,6 +100,7 @@ hapi:
       - org.farmsuite.fhir.interceptors.FarmSuiteConsentInterceptor
       - org.farmsuite.fhir.interceptors.PersonWriteConsentInterceptor
       - org.farmsuite.fhir.interceptors.ServerAssignedIdInterceptor
+      - org.farmsuite.fhir.interceptors.ExternalTaskAssignmentInterceptor
     custom-bean-packages: org.farmsuite.fhir
 
 sso:
