@@ -545,6 +545,14 @@
                     <reuseForks>true</reuseForks>
                     <parallel combine.self="override"></parallel>
                     <threadCount>1</threadCount>
+                    <!-- Tests heredados del starter (ca.uhn.fhir.jpa.starter): usan H2/Elasticsearch/Mdm y aquí fallan
+                         porque el proyecto fuerza el driver de Postgres ("Driver org.postgresql.Driver claims to not
+                         accept jdbcUrl jdbc:h2:mem"). Cada uno arranca un Spring completo (~25 min en total) y no
+                         prueban nada de FarmSuite. Se ejecutan a mano con -Dtest=... si se actualiza el starter. -->
+                    <excludes combine.self="override">
+                        <exclude>**/ca/uhn/fhir/jpa/starter/**</exclude>
+                        <exclude>**/*StressTest*</exclude>
+                    </excludes>
                 </configuration>
             </plugin>
 
@@ -614,6 +622,27 @@
                         <goals>
                             <goal>integration-test</goal>
                             <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Cobertura de unitarios + *IT en target/site/jacoco (solo informe, sin umbral) -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.14</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
                         </goals>
                     </execution>
                 </executions>
