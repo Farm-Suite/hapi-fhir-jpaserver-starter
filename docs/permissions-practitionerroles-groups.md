@@ -193,9 +193,8 @@ indexa nada.
      `ConceptMap`, `CodeSystem`, `ValueSet`, `NamingSystem`, `StructureMap`), y no hay un tenant
      conocido en el contexto de arranque para que el interceptor de partición lo resuelva solo.
 
-Ver también la sección **"SearchParameters custom"** de la skill `farmsuite:repo-hapi-fhir`
-(`Infra/claude/farmsuite/skills/repo-hapi-fhir/SKILL.md`) y las reglas del `CLAUDE.md` de este repo
-para el procedimiento general: cualquier filtro no estándar necesita su propio `SearchParameter` antes de
+Ver también las reglas del `CLAUDE.md` de este repo (SearchParameters nuevos en
+`src/main/resources/custom-search-parameters/`) para el procedimiento general: cualquier filtro no estándar necesita su propio `SearchParameter` antes de
 poder usarse.
 
 ---
