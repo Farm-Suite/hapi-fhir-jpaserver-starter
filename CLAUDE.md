@@ -1,16 +1,12 @@
 # hapi-fhir-jpaserver-starter — FarmSuite
 
 Servidor FHIR central de FarmSuite (R5, HAPI FHIR 8.4.0, Java 17). Es un **fork** de
-`hapifhir/hapi-fhir-jpaserver-starter`: el `AGENTS.md` y el `README.md` son los del proyecto
-original y no describen lo propio de FarmSuite — usar este archivo.
+`hapifhir/hapi-fhir-jpaserver-starter`: el `README.md` es el del proyecto
+original y no describe lo propio de FarmSuite — usar este archivo.
 
 Todo lo propio vive en el paquete **`org.farmsuite.fhir`** (`config/`, `interceptors/`, `usecase/`).
 Evitar tocar el código del starter original (`ca.uhn.fhir.jpa.starter`) para no complicar merges
 con upstream; si hace falta, extender desde `org.farmsuite.fhir`.
-
-Referencia completa (autorización `FarmSuiteRules`, particiones, interceptores, SearchParameters,
-configuración): skill **`farmsuite:repo-hapi-fhir`**. Mecanismos: `farmsuite:arquitectura-multitenancy`,
-`farmsuite:arquitectura-permisos`, `farmsuite:arquitectura-espejos-fhir-bd`.
 
 ## Comandos
 
@@ -20,7 +16,7 @@ mvn test -Dtest=<Clase>       # la suite completa es lenta
 ```
 
 Arrancar con la run configuration de IntelliJ `Application` (puerto **8081**, `/fhir`). Con
-Keycloak local, activar el perfil `sso-local`. Entorno: `farmsuite:flujo-entorno-local`.
+Keycloak local, activar el perfil `sso-local`.
 
 ## Reglas
 
@@ -34,4 +30,4 @@ Keycloak local, activar el perfil `sso-local`. Entorno: `farmsuite:flujo-entorno
   `RequestDetails.getTenantId()` como respaldo.
 - Espejos hacia microservicios: best-effort, nunca bloquear la escritura FHIR.
 - Por defecto el local corre contra un Postgres local propio (`Infra/local/docker-compose.yml`,
-  perfil `local-db` activo en `application.yaml`), no contra la de pre. Ver `farmsuite:flujo-entorno-local`.
+  perfil `local-db` activo en `application.yaml`), no contra la de pre.
