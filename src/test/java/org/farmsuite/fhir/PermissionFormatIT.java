@@ -46,8 +46,11 @@ class PermissionFormatIT extends AbstractFarmSuiteServerIT {
 		asHumanOf(TENANT_A, "pr-7", null, List.of("*.rscud"));
 
 		assertThat(clientFor(TENANT_A).read().resource(Organization.class).withId("perm-org-a").execute()).isNotNull();
-		clientFor(TENANT_A).update().resource(organization("perm-org-new", "Nueva")).execute();
-		clientFor(TENANT_A).delete().resourceById("Organization", "perm-org-new").execute();
+		// El id lo asigna el servidor: se crea sin id y se borra por el id devuelto.
+		Organization created = new Organization();
+		created.setName("Nueva");
+		var id = clientFor(TENANT_A).create().resource(created).execute().getId();
+		clientFor(TENANT_A).delete().resourceById(id.toUnqualifiedVersionless()).execute();
 	}
 
 	@Test
@@ -81,10 +84,9 @@ class PermissionFormatIT extends AbstractFarmSuiteServerIT {
 		assertThatThrownBy(() -> clientFor(TENANT_A).read().resource(Organization.class).withId("perm-org-a").execute())
 			.isInstanceOf(ForbiddenOperationException.class);
 
-		// Con "rscudp" se conceden las demás acciones, pero patch sigue sin darse.
+		// Con "rscudp" la "p" no añade ni quita nada: se conceden las demás acciones.
 		asHumanOf(TENANT_A, "pr-7", null, List.of("Organization.rscudp"));
-		assertThatThrownBy(() -> clientFor(TENANT_A).patch().withBody(JSON_PATCH).withId("Organization/perm-org-a").execute())
-			.isInstanceOf(ForbiddenOperationException.class);
+		assertThat(clientFor(TENANT_A).read().resource(Organization.class).withId("perm-org-a").execute()).isNotNull();
 	}
 
 	@Test

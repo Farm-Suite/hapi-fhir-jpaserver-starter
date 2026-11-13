@@ -60,6 +60,12 @@ class TerminologyScopeIT extends AbstractFarmSuiteServerIT {
 		return valueSet;
 	}
 
+	/** El id lo asigna el servidor: quien no es la cuenta de servicio crea sin id. */
+	private static <T extends Resource> T withoutId(T resource) {
+		resource.setId((String) null);
+		return resource;
+	}
+
 	private int countByUrl(String tenant, Class<? extends Resource> type, String url) {
 		Bundle found = clientFor(tenant).search().forResource(type).where(CodeSystem.URL.matches().value(url))
 			.returnBundle(Bundle.class).execute();
@@ -146,7 +152,7 @@ class TerminologyScopeIT extends AbstractFarmSuiteServerIT {
 	void codeSystemRscud_writesCodeSystemsButNotValueSets() {
 		asHumanOf(TENANT_X, "pr-7", null, List.of("CodeSystem.rscud"));
 
-		assertThat(clientFor(TENANT_X).update().resource(codeSystem("cs-x-w", "http://farmsuite.test/term/cs-x-w")).execute().getResource()).isNotNull();
+		assertThat(clientFor(TENANT_X).create().resource(withoutId(codeSystem("cs-x-w", "http://farmsuite.test/term/cs-x-w"))).execute().getResource()).isNotNull();
 		assertThatThrownBy(() -> clientFor(TENANT_X).update().resource(valueSet("vs-x-w-no", "http://farmsuite.test/term/vs-x-w-no")).execute())
 			.isInstanceOf(ForbiddenOperationException.class);
 	}
@@ -155,7 +161,7 @@ class TerminologyScopeIT extends AbstractFarmSuiteServerIT {
 	void valueSetRscud_writesValueSetsButNotCodeSystems() {
 		asHumanOf(TENANT_X, "pr-7", null, List.of("ValueSet.rscud"));
 
-		assertThat(clientFor(TENANT_X).update().resource(valueSet("vs-x-w", "http://farmsuite.test/term/vs-x-w")).execute().getResource()).isNotNull();
+		assertThat(clientFor(TENANT_X).create().resource(withoutId(valueSet("vs-x-w", "http://farmsuite.test/term/vs-x-w"))).execute().getResource()).isNotNull();
 		assertThatThrownBy(() -> clientFor(TENANT_X).update().resource(codeSystem("cs-x-w-no", "http://farmsuite.test/term/cs-x-w-no")).execute())
 			.isInstanceOf(ForbiddenOperationException.class);
 	}
