@@ -632,6 +632,12 @@
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
                 <version>0.8.14</version>
+                <configuration>
+                    <!-- Solo el código propio; el paquete upstream ca.uhn.fhir.jpa.starter queda fuera -->
+                    <includes>
+                        <include>org/farmsuite/**</include>
+                    </includes>
+                </configuration>
                 <executions>
                     <execution>
                         <goals>
