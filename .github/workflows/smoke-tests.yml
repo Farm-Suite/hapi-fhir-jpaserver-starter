@@ -19,13 +19,6 @@ jobs:
 
     runs-on: ubuntu-latest
 
-    # .mvn/settings.xml autentica contra GitHub Packages (Farm-Suite/SSO) con
-    # GITHUB_ACTOR/GITHUB_TOKEN. El GITHUB_TOKEN automático no puede leer paquetes
-    # de otro repo del org: se usa el PAT GH_PACKAGES_TOKEN (read:packages).
-    env:
-      GITHUB_ACTOR: ${{ github.actor }}
-      GITHUB_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN }}
-
     steps:
       - name: Checkout project
         uses: actions/checkout@v4
