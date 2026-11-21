@@ -95,7 +95,9 @@ public class CustomSearchParameterInitializer implements ApplicationRunner {
                     outcome.getId()
             );
 
-            if (parsed instanceof SearchParameter searchParameter) {
+            // Solo si el SearchParameter cambió: reindexar en cada arranque recorre todos los
+            // recursos de su base aunque el índice ya esté al día.
+            if (!outcome.isNop() && parsed instanceof SearchParameter searchParameter) {
                 reindexAffectedResources(searchParameter);
             }
         } catch (IOException e) {
