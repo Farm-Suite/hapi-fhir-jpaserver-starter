@@ -1,0 +1,48 @@
+name: Tests — FarmSuite
+
+# Workflow propio de FarmSuite (fichero nuevo para no chocar con el upstream al
+# sincronizar el fork). Ejecuta los tests unitarios y solo los IT de
+# org.farmsuite: los IT del starter (ca.uhn.fhir.jpa.starter.*) no arrancan con
+# la configuración de FarmSuite.
+#
+# .mvn/settings.xml autentica contra GitHub Packages (Farm-Suite/SSO) con
+# GITHUB_ACTOR/GITHUB_TOKEN. El GITHUB_TOKEN automático no puede leer paquetes
+# de otro repo del org: se usa el PAT GH_PACKAGES_TOKEN (read:packages), igual
+# que docker-image.yml.
+
+on:
+  pull_request:
+    branches: [master]
+    paths-ignore: ["charts/**"]
+  push:
+    branches: [master]
+    paths-ignore: ["charts/**"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    concurrency:
+      group: farmsuite-tests-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    env:
+      GITHUB_ACTOR: ${{ github.actor }}
+      GITHUB_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'maven'
+      - name: mvn verify (unitarios + IT de org.farmsuite)
+        run: mvn -B verify -Dit.test='org/farmsuite/**/*IT'
+      - name: Informes de tests
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: |
+            target/surefire-reports
+            target/failsafe-reports
