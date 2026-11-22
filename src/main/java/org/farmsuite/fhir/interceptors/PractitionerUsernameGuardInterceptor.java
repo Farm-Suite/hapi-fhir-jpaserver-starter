@@ -45,9 +45,6 @@ public class PractitionerUsernameGuardInterceptor {
 
 	public static final String PRACTITIONER_USERNAME_SYSTEM = "https://farmsuite.org/extensions/practitioner-username";
 
-	/** Practitioner siempre vive en la partición DEFAULT (ver RequestTenantInterceptor). */
-	private static final String DEFAULT_PARTITION = "DEFAULT";
-
 	private final DaoRegistry daoRegistry;
 
 	@Hook(Pointcut.STORAGE_PRESTORAGE_RESOURCE_CREATED)
@@ -93,8 +90,11 @@ public class PractitionerUsernameGuardInterceptor {
 		map.add("username", new TokenParam(PRACTITIONER_USERNAME_SYSTEM, username));
 		map.setLoadSynchronousUpTo(1);
 
+		// Practitioner siempre vive en la partición DEFAULT (ver RequestTenantInterceptor). Se usa
+		// RequestPartitionId.defaultPartition() y no fromPartitionName("DEFAULT"): esta última trae el
+		// nombre sin id resuelto y la búsqueda JPA falla con HAPI-2223 ("Partition IDs have not been set").
 		SystemRequestDetails requestDetails =
-			SystemRequestDetails.forRequestPartitionId(RequestPartitionId.fromPartitionName(DEFAULT_PARTITION));
+			SystemRequestDetails.forRequestPartitionId(RequestPartitionId.defaultPartition());
 
 		IBundleProvider results = dao.search(map, requestDetails);
 		return !results.getResources(0, 1).isEmpty();

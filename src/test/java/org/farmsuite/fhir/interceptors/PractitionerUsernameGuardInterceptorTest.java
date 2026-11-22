@@ -1,5 +1,6 @@
 package org.farmsuite.fhir.interceptors;
 
+import ca.uhn.fhir.interceptor.model.RequestPartitionId;
 import ca.uhn.fhir.jpa.api.dao.DaoRegistry;
 import ca.uhn.fhir.jpa.api.dao.IFhirResourceDao;
 import ca.uhn.fhir.jpa.searchparam.SearchParameterMap;
@@ -63,7 +64,11 @@ class PractitionerUsernameGuardInterceptorTest {
 
 		ArgumentCaptor<RequestDetails> details = ArgumentCaptor.forClass(RequestDetails.class);
 		verify(dao).search(any(SearchParameterMap.class), details.capture());
-		assertThat(((SystemRequestDetails) details.getValue()).getRequestPartitionId().getPartitionNames()).containsExactly("DEFAULT");
+		// La partición por defecto real (con su id), no un nombre "DEFAULT" sin resolver: con este
+		// último la búsqueda JPA falla con HAPI-2223 (Farm-Suite/Infra#11).
+		RequestPartitionId partition = ((SystemRequestDetails) details.getValue()).getRequestPartitionId();
+		assertThat(partition.isDefaultPartition()).isTrue();
+		assertThat(partition.hasPartitionIds()).isTrue();
 	}
 
 	@Test
