@@ -651,6 +651,29 @@
                             <goal>report</goal>
                         </goals>
                     </execution>
+                    <!-- Umbral: la build falla si baja la cobertura de líneas de org.farmsuite.fhir.
+                         Medido 96,4 % (1127/1169 líneas), redondeado hacia abajo al 5 %: 95 %. -->
+                    <execution>
+                        <id>check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.95</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
+                    </execution>
                 </executions>
             </plugin>
 
